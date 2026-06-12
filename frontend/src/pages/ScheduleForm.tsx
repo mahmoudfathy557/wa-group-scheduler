@@ -41,6 +41,7 @@ export function ScheduleForm() {
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [groupFilter, setGroupFilter] = useState("");
 
   const { data: groups } = useQuery({
     queryKey: ["groups"],
@@ -70,7 +71,7 @@ export function ScheduleForm() {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
       groupIds: [],
       imageUrls: [],
-      runNow: false
+      runNow: true
     }
   });
 
@@ -296,29 +297,45 @@ export function ScheduleForm() {
           name="groupIds"
           control={control}
           render={({ field }) => (
-            <div className="border rounded p-2 max-h-60 overflow-auto">
-              {!groups || groups.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  No groups — sync from the Groups page first.
-                </p>
-              ) : (
-                groups.map((g) => (
-                  <label key={g.id} className="flex items-center gap-2 py-1">
-                    <input
-                      type="checkbox"
-                      checked={field.value.includes(g.id)}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...field.value, g.id]
-                          : field.value.filter((x) => x !== g.id);
-                        field.onChange(next);
-                      }}
-                    />
-                    <span className="text-sm">{g.name}</span>
-                  </label>
-                ))
-              )}
-            </div>
+            <>
+              <input
+                type="text"
+                placeholder="Search groups..."
+                value={groupFilter}
+                onChange={(e) => setGroupFilter(e.target.value)}
+                className="w-full border rounded px-3 py-2 mb-2 text-sm"
+              />
+              <div className="border rounded p-2 max-h-60 overflow-auto">
+                {!groups || groups.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No groups — sync from the Groups page first.
+                  </p>
+                ) : (
+                  groups
+                    .filter((g) =>
+                      g.name.toLowerCase().includes(groupFilter.toLowerCase())
+                    )
+                    .map((g) => (
+                      <label
+                        key={g.id}
+                        className="flex items-center gap-2 py-1"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={field.value.includes(g.id)}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...field.value, g.id]
+                              : field.value.filter((x) => x !== g.id);
+                            field.onChange(next);
+                          }}
+                        />
+                        <span className="text-sm">{g.name}</span>
+                      </label>
+                    ))
+                )}
+              </div>
+            </>
           )}
         />
         {errors.groupIds && (
