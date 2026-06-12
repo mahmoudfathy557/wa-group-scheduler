@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+
 # WA-Scheduler
 
 Multi-tenant WhatsApp group message scheduler. Connect a WhatsApp account, sync your groups, and schedule recurring messages with cron expressions/timezone support or fixed interval mode, including up to 5 image attachments per scheduled message.
@@ -192,4 +194,8 @@ Covers `AuthService`, `TenantPrismaService` extension contract, and cron / timez
 
 ## License
 
-Personal/educational use only. **You are solely responsible** for any account bans or other consequences of running this against your WhatsApp account.
+# Personal/educational use only. **You are solely responsible** for any account bans or other consequences of running this against your WhatsApp account.
+
+# wa-group-scheduler
+
+> > > > > > > 4f068232b64f6cd4e866a6091ad00fae13992945
