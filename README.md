@@ -45,8 +45,10 @@ Multi-tenant WhatsApp group message scheduler. Connect a WhatsApp account, sync 
 
 ### Prerequisites
 
-- Docker + Docker Compose
-- Or, for local dev: Node 20+, PostgreSQL 16, Redis 7
+- Node 20+
+- PostgreSQL 16
+- Redis 7
+- Docker + Docker Compose (optional)
 
 ### 1. Generate secrets
 
@@ -64,10 +66,10 @@ Copy `.env.example` → `.env` and fill in the secrets above:
 
 ```env
 # Postgres
-DATABASE_URL=postgresql://postgres:postgres@postgres:5432/wa_scheduler
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/wa_scheduler
 
 # Redis
-REDIS_URL=redis://redis:6379
+REDIS_URL=redis://localhost:6379
 
 # Auth
 JWT_SECRET=<paste base64 from step 1>
@@ -87,7 +89,39 @@ SEND_MAX_DELAY_MS=10000
 LOG_RETENTION_DAYS=7
 ```
 
-### 3. Run with Docker
+### 3. Run locally (without Docker)
+
+Create app-local env files so each app can run from its own folder:
+
+```bash
+# from repo root
+cp .env backend/.env
+cp .env frontend/.env
+```
+
+If you're on Windows PowerShell, use:
+
+```powershell
+Copy-Item .env backend/.env
+Copy-Item .env frontend/.env
+```
+
+Then run:
+
+```bash
+# backend terminal
+cd backend
+npm install
+npx prisma migrate dev
+npm run start:dev   # http://localhost:3000
+
+# frontend terminal
+cd frontend
+npm install
+npm run dev         # http://localhost:5173
+```
+
+### 4. Run with Docker (optional)
 
 ```bash
 docker compose up --build
@@ -101,21 +135,6 @@ docker compose exec backend npx prisma migrate deploy
 ```
 
 The frontend is served at <http://localhost:5173> and the backend at <http://localhost:3000>.
-
-### 4. Local dev (without Docker)
-
-```bash
-# Backend
-cd backend
-npm install
-npx prisma migrate dev
-npm run start:dev   # http://localhost:3000
-
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev         # http://localhost:5173
-```
 
 ## End-to-end test plan (manual)
 
