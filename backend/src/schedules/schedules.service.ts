@@ -9,12 +9,44 @@ import parser from "cron-parser";
 import { TenantPrismaService } from "../prisma/tenant-prisma.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { TenantContext } from "../common/tenant-context";
-import { CreateScheduleDto, UpdateScheduleDto, isValidCron } from "./dto";
+import {
+  CRON_MIN_INTERVAL_ERROR_MESSAGE,
+  CreateScheduleDto,
+  UpdateScheduleDto,
+  isValidCron
+} from "./dto";
 import { SCHEDULE_TRIGGER_QUEUE } from "./queue.constants";
 
 interface TriggerJobData {
   scheduleId: string;
   tenantId: string;
+}
+
+function parseIntervalFromCron(expr: string): number | null {
+  const cron = expr.trim();
+  const everyMinutes = cron.match(/^\*\/(\d+)\s+\*\s+\*\s+\*\s+\*$/);
+  if (everyMinutes) return Number(everyMinutes[1]);
+
+  const everyHours = cron.match(/^0\s+\*\/(\d+)\s+\*\s+\*\s+\*$/);
+  if (everyHours) return Number(everyHours[1]) * 60;
+
+  return null;
+}
+
+function nextRunFromAnchor(
+  anchorAt: Date,
+  intervalMinutes: number,
+  now = new Date()
+): Date {
+  const stepMs = intervalMinutes * 60_000;
+  const anchorMs = anchorAt.getTime();
+  const nowMs = now.getTime();
+
+  if (nowMs < anchorMs) return anchorAt;
+
+  const elapsed = nowMs - anchorMs;
+  const steps = Math.floor(elapsed / stepMs) + 1;
+  return new Date(anchorMs + steps * stepMs);
 }
 
 @Injectable()
@@ -47,10 +79,14 @@ export class SchedulesService {
 
   async create(dto: CreateScheduleDto) {
     if (!isValidCron(dto.cronExpression, dto.timezone)) {
-      throw new BadRequestException("Invalid cron expression or timezone");
+      throw new BadRequestException(
+        `Invalid cron expression/timezone. ${CRON_MIN_INTERVAL_ERROR_MESSAGE}.`
+      );
     }
     const client: any = this.tprisma.client;
     const tenantId = this.ctx.requireTenantId();
+    const intervalMinutes = parseIntervalFromCron(dto.cronExpression);
+    const intervalAnchorAt = intervalMinutes ? new Date() : null;
 
     // Validate groups belong to tenant.
     const groups = await client.group.findMany({
@@ -60,13 +96,17 @@ export class SchedulesService {
       throw new BadRequestException("One or more groups not found");
     }
 
-    const nextRunAt = nextRun(dto.cronExpression, dto.timezone);
+    const nextRunAt = intervalMinutes
+      ? nextRunFromAnchor(intervalAnchorAt as Date, intervalMinutes)
+      : nextRun(dto.cronExpression, dto.timezone);
 
     const created = await client.schedule.create({
       data: {
         messageText: dto.messageText,
         cronExpression: dto.cronExpression,
         timezone: dto.timezone,
+        intervalMinutes,
+        intervalAnchorAt,
         imageUrls: dto.imageUrls ?? [],
         nextRunAt,
         groupLinks: { create: dto.groupIds.map((groupId) => ({ groupId })) }
@@ -78,12 +118,18 @@ export class SchedulesService {
       created.id,
       tenantId,
       dto.cronExpression,
-      dto.timezone
+      dto.timezone,
+      intervalMinutes,
+      intervalAnchorAt
     );
     await this.prisma.schedule.update({
       where: { id: created.id },
       data: { repeatJobKey }
     });
+
+    if (dto.runNow) {
+      await this.enqueueImmediateTrigger(created.id, tenantId);
+    }
 
     return this.get(created.id);
   }
@@ -95,9 +141,20 @@ export class SchedulesService {
 
     const cron = dto.cronExpression ?? existing.cronExpression;
     const tz = dto.timezone ?? existing.timezone;
+    const isIntervalSchedule = parseIntervalFromCron(cron);
+    const shouldResetIntervalAnchor =
+      dto.cronExpression !== undefined || dto.status === "active";
+    const intervalMinutes = isIntervalSchedule;
+    const intervalAnchorAt = intervalMinutes
+      ? shouldResetIntervalAnchor
+        ? new Date()
+        : (existing.intervalAnchorAt ?? new Date())
+      : null;
     if (dto.cronExpression || dto.timezone) {
       if (!isValidCron(cron, tz))
-        throw new BadRequestException("Invalid cron expression or timezone");
+        throw new BadRequestException(
+          `Invalid cron expression/timezone. ${CRON_MIN_INTERVAL_ERROR_MESSAGE}.`
+        );
     }
 
     const data: any = {};
@@ -107,7 +164,13 @@ export class SchedulesService {
     if (dto.timezone !== undefined) data.timezone = dto.timezone;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.imageUrls !== undefined) data.imageUrls = dto.imageUrls;
-    if (dto.cronExpression || dto.timezone) data.nextRunAt = nextRun(cron, tz);
+    if (dto.cronExpression !== undefined || dto.status === "active") {
+      data.intervalMinutes = intervalMinutes;
+      data.intervalAnchorAt = intervalAnchorAt;
+      data.nextRunAt = intervalMinutes
+        ? nextRunFromAnchor(intervalAnchorAt as Date, intervalMinutes)
+        : nextRun(cron, tz);
+    }
 
     if (dto.groupIds) {
       const groups = await client.group.findMany({
@@ -130,11 +193,22 @@ export class SchedulesService {
     }
     const finalStatus = dto.status ?? existing.status;
     if (finalStatus === "active") {
-      const repeatJobKey = await this.upsertRepeat(id, tenantId, cron, tz);
+      const repeatJobKey = await this.upsertRepeat(
+        id,
+        tenantId,
+        cron,
+        tz,
+        intervalMinutes,
+        intervalAnchorAt
+      );
       await this.prisma.schedule.update({
         where: { id },
         data: { repeatJobKey }
       });
+
+      if (dto.runNow) {
+        await this.enqueueImmediateTrigger(id, tenantId);
+      }
     } else {
       await this.prisma.schedule.update({
         where: { id },
@@ -186,10 +260,31 @@ export class SchedulesService {
     scheduleId: string,
     tenantId: string,
     cron: string,
-    tz: string
+    tz: string,
+    intervalMinutes?: number | null,
+    intervalAnchorAt?: Date | null
   ): Promise<string> {
+    if (!isValidCron(cron, tz)) {
+      throw new BadRequestException(CRON_MIN_INTERVAL_ERROR_MESSAGE);
+    }
+
     // jobId == scheduleId so we can deterministically remove later.
     const jobName = "trigger";
+    if (intervalMinutes && intervalAnchorAt) {
+      const everyMs = intervalMinutes * 60_000;
+      await this.triggerQueue.add(
+        jobName,
+        { scheduleId, tenantId },
+        {
+          repeat: { every: everyMs, startDate: intervalAnchorAt },
+          jobId: scheduleId,
+          removeOnComplete: { count: 50 },
+          removeOnFail: { count: 50 }
+        }
+      );
+      return `every:${jobName}:${scheduleId}:${everyMs}:${intervalAnchorAt.toISOString()}`;
+    }
+
     await this.triggerQueue.add(
       jobName,
       { scheduleId, tenantId },
@@ -200,16 +295,52 @@ export class SchedulesService {
         removeOnFail: { count: 50 }
       }
     );
-    // Compose a deterministic repeat key; BullMQ uses pattern+tz+name+jobId internally.
-    return `${jobName}:${scheduleId}:${tz}:${cron}`;
+    return `cron:${jobName}:${scheduleId}:${tz}:${cron}`;
+  }
+
+  private async enqueueImmediateTrigger(
+    scheduleId: string,
+    tenantId: string
+  ): Promise<void> {
+    await this.triggerQueue.add(
+      "trigger",
+      { scheduleId, tenantId },
+      {
+        removeOnComplete: { count: 50 },
+        removeOnFail: { count: 50 }
+      }
+    );
   }
 
   private async removeRepeat(repeatJobKey: string): Promise<void> {
-    const [, scheduleId, tz, ...patternParts] = repeatJobKey.split(":");
-    const pattern = patternParts.join(":");
+    const parts = repeatJobKey.split(":");
     try {
+      if (parts[0] === "trigger") {
+        const [jobName, scheduleId, tz, ...patternParts] = parts;
+        const pattern = patternParts.join(":");
+        await this.triggerQueue.removeRepeatable(
+          jobName,
+          { pattern, tz },
+          scheduleId
+        );
+        return;
+      }
+
+      if (parts[0] === "every") {
+        const [, jobName, scheduleId, everyMs, ...startDateParts] = parts;
+        const startDateIso = startDateParts.join(":");
+        await this.triggerQueue.removeRepeatable(
+          jobName,
+          { every: Number(everyMs), startDate: new Date(startDateIso) },
+          scheduleId
+        );
+        return;
+      }
+
+      const [, jobName, scheduleId, tz, ...patternParts] = parts;
+      const pattern = patternParts.join(":");
       await this.triggerQueue.removeRepeatable(
-        "trigger",
+        jobName,
         { pattern, tz },
         scheduleId
       );

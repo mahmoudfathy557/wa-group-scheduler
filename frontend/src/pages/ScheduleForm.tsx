@@ -8,14 +8,24 @@ import toast from "react-hot-toast";
 import TimezoneSelect from "react-timezone-select";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { api } from "../lib/api";
-import { CronBuilder } from "../components/CronBuilder";
+import {
+  CronBuilder,
+  MIN_CRON_INTERVAL_MINUTES,
+  violatesMinCronInterval
+} from "../components/CronBuilder";
 
 const schema = z.object({
   messageText: z.string().min(1).max(4096),
-  cronExpression: z.string().min(1),
+  cronExpression: z
+    .string()
+    .min(1)
+    .refine((expr) => !violatesMinCronInterval(expr), {
+      message: `Cron period must be ${MIN_CRON_INTERVAL_MINUTES} minutes or more`
+    }),
   timezone: z.string().min(1),
   groupIds: z.array(z.string()).min(1, "Select at least one group"),
-  imageUrls: z.array(z.string().url()).max(5).optional()
+  imageUrls: z.array(z.string().url()).max(5).optional(),
+  runNow: z.boolean().optional()
 });
 type FormVals = z.infer<typeof schema>;
 
@@ -59,7 +69,8 @@ export function ScheduleForm() {
       cronExpression: "0 9 * * *",
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
       groupIds: [],
-      imageUrls: []
+      imageUrls: [],
+      runNow: false
     }
   });
 
@@ -70,7 +81,8 @@ export function ScheduleForm() {
         cronExpression: existing.cronExpression,
         timezone: existing.timezone,
         groupIds: existing.groupLinks.map((l: any) => l.group.id),
-        imageUrls: existing.imageUrls || []
+        imageUrls: existing.imageUrls || [],
+        runNow: false
       });
     }
   }, [existing, reset]);
@@ -136,6 +148,7 @@ export function ScheduleForm() {
       fd.append("messageText", v.messageText);
       fd.append("cronExpression", v.cronExpression);
       fd.append("timezone", v.timezone);
+      fd.append("runNow", String(Boolean(v.runNow)));
       v.groupIds.forEach((g) => fd.append("groupIds", g));
       if ((v.imageUrls || []).length > 0) {
         (v.imageUrls || []).forEach((url) => fd.append("imageUrls", url));
@@ -313,6 +326,15 @@ export function ScheduleForm() {
             {errors.groupIds.message as string}
           </p>
         )}
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" {...register("runNow")} />
+          <span>
+            Send once immediately on save, then continue scheduled runs
+          </span>
+        </label>
       </div>
 
       <div className="flex gap-2">

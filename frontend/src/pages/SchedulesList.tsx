@@ -13,6 +13,19 @@ interface Schedule {
   groupLinks: { group: { id: string; name: string } }[];
 }
 
+function formatInTimezone(isoDate: string, timezone: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: timezone,
+    timeZoneName: "short"
+  }).format(new Date(isoDate));
+}
+
 export function SchedulesList() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -74,7 +87,9 @@ export function SchedulesList() {
                 <td>{s.timezone}</td>
                 <td>{s.groupLinks.length}</td>
                 <td>
-                  {s.nextRunAt ? new Date(s.nextRunAt).toLocaleString() : "—"}
+                  {s.nextRunAt
+                    ? formatInTimezone(s.nextRunAt, s.timezone)
+                    : "—"}
                 </td>
                 <td>
                   <span

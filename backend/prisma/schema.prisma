@@ -84,6 +84,8 @@ model Schedule {
   imageUrls      String[]  @default([])
   cronExpression String
   timezone       String    @default("UTC")
+  intervalMinutes Int?
+  intervalAnchorAt DateTime?
   status         String    @default("active") // active | paused
   nextRunAt      DateTime?
   // BullMQ repeatable job key (returned from queue.upsertJobScheduler)

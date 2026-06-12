@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import parser from "cron-parser";
 import { PrismaService } from "../prisma/prisma.service";
 import { MESSAGE_SEND_QUEUE, SCHEDULE_TRIGGER_QUEUE } from "./queue.constants";
+import { CRON_MIN_INTERVAL_ERROR_MESSAGE, isValidCron } from "./dto";
 
 interface TriggerJobData {
   scheduleId: string;
@@ -21,6 +22,22 @@ interface SendJobData {
   logId: string;
   // Index in the fan-out — used for jittered staggering.
   index: number;
+}
+
+function nextRunFromAnchor(
+  anchorAt: Date,
+  intervalMinutes: number,
+  now = new Date()
+): Date {
+  const stepMs = intervalMinutes * 60_000;
+  const anchorMs = anchorAt.getTime();
+  const nowMs = now.getTime();
+
+  if (nowMs < anchorMs) return anchorAt;
+
+  const elapsed = nowMs - anchorMs;
+  const steps = Math.floor(elapsed / stepMs) + 1;
+  return new Date(anchorMs + steps * stepMs);
 }
 
 /**
@@ -48,6 +65,13 @@ export class ScheduleTriggerProcessor extends WorkerHost {
     });
     if (!schedule) {
       this.logger.warn(`Trigger ${scheduleId}: schedule missing or paused`);
+      return;
+    }
+
+    if (!isValidCron(schedule.cronExpression, schedule.timezone)) {
+      this.logger.warn(
+        `Trigger ${scheduleId}: skipped. ${CRON_MIN_INTERVAL_ERROR_MESSAGE}`
+      );
       return;
     }
 
@@ -99,10 +123,18 @@ export class ScheduleTriggerProcessor extends WorkerHost {
 
     // Update nextRunAt projection.
     try {
-      const next = parser
-        .parseExpression(schedule.cronExpression, { tz: schedule.timezone })
-        .next()
-        .toDate();
+      const next =
+        schedule.intervalMinutes && schedule.intervalAnchorAt
+          ? nextRunFromAnchor(
+              schedule.intervalAnchorAt,
+              schedule.intervalMinutes
+            )
+          : parser
+              .parseExpression(schedule.cronExpression, {
+                tz: schedule.timezone
+              })
+              .next()
+              .toDate();
       await this.prisma.schedule.update({
         where: { id: scheduleId },
         data: { nextRunAt: next }

@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 type Mode = "daily" | "weekly" | "monthly" | "hourly" | "interval" | "custom";
+
+export const MIN_CRON_INTERVAL_MINUTES = 30;
 
 const DAYS = [
   { label: "Sun", value: 0 },
@@ -15,8 +17,49 @@ const DAYS = [
 ];
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
-const MINUTES = [0, 5, 10, 15, 20, 25, 30, 45];
-const INTERVALS_MIN = [5, 10, 15, 20, 30, 45, 60, 120, 180, 240, 360, 720];
+const MINUTES = [0, 30, 45];
+const INTERVALS_MIN = [30, 45, 60, 120, 180, 240, 360, 720];
+
+function minimumGapBetweenMinutes(minutes: number[]): number {
+  const sorted = [...new Set(minutes)].sort((a, b) => a - b);
+  if (sorted.length < 2) return 60;
+
+  let minGap = 60;
+  for (let i = 0; i < sorted.length; i++) {
+    const current = sorted[i];
+    const next = i === sorted.length - 1 ? sorted[0] + 60 : sorted[i + 1];
+    minGap = Math.min(minGap, next - current);
+  }
+  return minGap;
+}
+
+export function violatesMinCronInterval(
+  expr: string,
+  minMinutes = MIN_CRON_INTERVAL_MINUTES
+): boolean {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return false;
+
+  const [minuteField] = parts;
+  if (minuteField === "*") return true;
+
+  const everyNMinutesMatch = minuteField.match(/^\*\/(\d+)$/);
+  if (everyNMinutesMatch) {
+    return Number(everyNMinutesMatch[1]) < minMinutes;
+  }
+
+  const rangeStepMatch = minuteField.match(/^(\d+)-(\d+)\/(\d+)$/);
+  if (rangeStepMatch) {
+    return Number(rangeStepMatch[3]) < minMinutes;
+  }
+
+  if (/^\d+(,\d+)+$/.test(minuteField)) {
+    const values = minuteField.split(",").map((v) => Number(v));
+    return minimumGapBetweenMinutes(values) < minMinutes;
+  }
+
+  return false;
+}
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -36,7 +79,7 @@ function buildCron(
       return `${minute} ${hour} * * *`;
     case "weekly": {
       const days = weekDays.length
-        ? weekDays.sort((a, b) => a - b).join(",")
+        ? [...weekDays].sort((a, b) => a - b).join(",")
         : "*";
       return `${minute} ${hour} * * ${days}`;
     }
@@ -79,6 +122,7 @@ function parseCron(cron: string): {
   // every-N-minutes: */N * * * *
   if (/^\*\/\d+$/.test(min) && hr === "*" && dom === "*" && dow === "*") {
     const n = parseInt(min.slice(2));
+    if (n < MIN_CRON_INTERVAL_MINUTES) return defaults;
     return { ...defaults, mode: "interval", intervalMin: n };
   }
 
@@ -164,6 +208,14 @@ function ordinal(n: number) {
   }
 }
 
+function sameNumberArray(a: number[], b: number[]) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 // ─── component ───────────────────────────────────────────────────────────────
 
 interface CronBuilderProps {
@@ -173,30 +225,53 @@ interface CronBuilderProps {
 }
 
 export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
-  const parsed = parseCron(value);
+  const initialParsedRef = useRef(parseCron(value));
+  const internalUpdateRef = useRef(false);
 
-  const [mode, setMode] = useState<Mode>(parsed.mode);
-  const [hour, setHour] = useState(parsed.hour);
-  const [minute, setMinute] = useState(parsed.minute);
-  const [weekDays, setWeekDays] = useState<number[]>(parsed.weekDays);
-  const [monthDay, setMonthDay] = useState(parsed.monthDay);
-  const [intervalMin, setIntervalMin] = useState(parsed.intervalMin);
+  const [mode, setMode] = useState<Mode>(initialParsedRef.current.mode);
+  const [hour, setHour] = useState(initialParsedRef.current.hour);
+  const [minute, setMinute] = useState(initialParsedRef.current.minute);
+  const [weekDays, setWeekDays] = useState<number[]>(
+    initialParsedRef.current.weekDays
+  );
+  const [monthDay, setMonthDay] = useState(initialParsedRef.current.monthDay);
+  const [intervalMin, setIntervalMin] = useState(
+    initialParsedRef.current.intervalMin
+  );
   const [custom, setCustom] = useState(value);
+
+  const generated = useMemo(
+    () =>
+      buildCron(mode, hour, minute, weekDays, monthDay, intervalMin, custom),
+    [mode, hour, minute, weekDays, monthDay, intervalMin, custom]
+  );
+
+  // Keep local editor state aligned when form value is hydrated externally.
+  useEffect(() => {
+    if (internalUpdateRef.current) {
+      internalUpdateRef.current = false;
+      return;
+    }
+
+    const next = parseCron(value);
+    setMode(next.mode);
+    setHour(next.hour);
+    setMinute(next.minute);
+    setWeekDays((prev) =>
+      sameNumberArray(prev, next.weekDays) ? prev : next.weekDays
+    );
+    setMonthDay(next.monthDay);
+    setIntervalMin(next.intervalMin);
+    setCustom(value);
+  }, [value]);
 
   // Emit whenever any sub-field changes
   useEffect(() => {
-    const cron = buildCron(
-      mode,
-      hour,
-      minute,
-      weekDays,
-      monthDay,
-      intervalMin,
-      custom
-    );
-    if (cron !== value) onChange(cron);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, hour, minute, weekDays, monthDay, intervalMin, custom]);
+    if (generated !== value) {
+      internalUpdateRef.current = true;
+      onChange(generated);
+    }
+  }, [generated, onChange, value]);
 
   function toggleDay(d: number) {
     setWeekDays((prev) =>
@@ -213,15 +288,10 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
     { key: "custom", label: "Custom cron" }
   ];
 
-  const generated = buildCron(
-    mode,
-    hour,
-    minute,
-    weekDays,
-    monthDay,
-    intervalMin,
-    custom
-  );
+  const customIntervalError =
+    mode === "custom" && violatesMinCronInterval(custom)
+      ? `Cron period must be ${MIN_CRON_INTERVAL_MINUTES} minutes or more`
+      : undefined;
 
   return (
     <div className="space-y-3">
@@ -343,6 +413,9 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
                 </option>
               ))}
             </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Minimum interval: 30 minutes. Runs from save time (e.g. :07, :37).
+            </p>
           </div>
         )}
 
@@ -365,6 +438,11 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
               className="w-full border rounded px-3 py-2 font-mono text-sm"
               placeholder="0 9 * * *"
             />
+            {customIntervalError && (
+              <p className="text-amber-700 text-xs mt-1">
+                {customIntervalError}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -381,7 +459,9 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
         </p>
       )}
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {(error || customIntervalError) && (
+        <p className="text-red-600 text-sm">{error || customIntervalError}</p>
+      )}
     </div>
   );
 }

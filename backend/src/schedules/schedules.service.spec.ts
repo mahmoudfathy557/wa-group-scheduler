@@ -5,8 +5,14 @@ describe("schedules dto / cron helpers", () => {
   describe("isValidCron", () => {
     it("accepts standard 5-field cron with timezone", () => {
       expect(isValidCron("0 9 * * *", "America/New_York")).toBe(true);
-      expect(isValidCron("*/15 * * * *", "UTC")).toBe(true);
+      expect(isValidCron("*/30 * * * *", "UTC")).toBe(true);
       expect(isValidCron("0 9 * * 1-5", "Europe/London")).toBe(true);
+    });
+
+    it("rejects cron expressions that run more often than every 30 minutes", () => {
+      expect(isValidCron("* * * * *", "UTC")).toBe(false);
+      expect(isValidCron("*/15 * * * *", "UTC")).toBe(false);
+      expect(isValidCron("0,15 * * * *", "UTC")).toBe(false);
     });
 
     it("rejects garbage expressions", () => {
