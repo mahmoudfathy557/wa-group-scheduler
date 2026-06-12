@@ -67,6 +67,7 @@ export class SchedulesService {
         messageText: dto.messageText,
         cronExpression: dto.cronExpression,
         timezone: dto.timezone,
+        imageUrls: dto.imageUrls ?? [],
         nextRunAt,
         groupLinks: { create: dto.groupIds.map((groupId) => ({ groupId })) }
       },
@@ -105,6 +106,7 @@ export class SchedulesService {
       data.cronExpression = dto.cronExpression;
     if (dto.timezone !== undefined) data.timezone = dto.timezone;
     if (dto.status !== undefined) data.status = dto.status;
+    if (dto.imageUrls !== undefined) data.imageUrls = dto.imageUrls;
     if (dto.cronExpression || dto.timezone) data.nextRunAt = nextRun(cron, tz);
 
     if (dto.groupIds) {

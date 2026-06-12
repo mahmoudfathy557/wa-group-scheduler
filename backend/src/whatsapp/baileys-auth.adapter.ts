@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, UnauthorizedException } from "@nestjs/common";
 import {
   AuthenticationCreds,
   AuthenticationState,
@@ -134,14 +134,21 @@ export class BaileysAuthAdapter {
   private async persistCreds(tenantId: string, creds: AuthenticationCreds) {
     const json = JSON.stringify(creds, BufferJSON.replacer);
     const enc = this.crypto.encrypt(json);
-    await this.prisma.whatsAppSession.upsert({
-      where: { tenantId },
-      create: {
-        tenantId,
-        encryptedCreds: enc,
-        connectionStatus: "disconnected"
-      },
-      update: { encryptedCreds: enc }
-    });
+    try {
+      await this.prisma.whatsAppSession.upsert({
+        where: { tenantId },
+        create: {
+          tenantId,
+          encryptedCreds: enc,
+          connectionStatus: "disconnected"
+        },
+        update: { encryptedCreds: enc }
+      });
+    } catch (e: any) {
+      if (e?.code === "P2003") {
+        throw new UnauthorizedException("Invalid or stale tenant context");
+      }
+      throw e;
+    }
   }
 }

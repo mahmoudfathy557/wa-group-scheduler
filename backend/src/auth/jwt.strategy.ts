@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
+import { PrismaService } from "../prisma/prisma.service";
 
 interface JwtPayload {
   sub: string;
@@ -10,7 +11,7 @@ interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
-  constructor() {
+  constructor(private readonly prisma: PrismaService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -18,14 +19,23 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
     });
   }
 
-  validate(payload: JwtPayload) {
+  async validate(payload: JwtPayload) {
     if (!payload?.sub || !payload?.tenantId) {
       throw new UnauthorizedException();
     }
+
+    const user = await this.prisma.user.findFirst({
+      where: { id: payload.sub, tenantId: payload.tenantId },
+      select: { id: true, email: true, tenantId: true }
+    });
+    if (!user) {
+      throw new UnauthorizedException("Invalid or stale token");
+    }
+
     return {
-      userId: payload.sub,
-      tenantId: payload.tenantId,
-      email: payload.email
+      userId: user.id,
+      tenantId: user.tenantId,
+      email: user.email
     };
   }
 }

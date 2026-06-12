@@ -15,6 +15,7 @@ interface SendJobData {
   runId: string;
   groupJid: string;
   messageText: string;
+  imageUrls: string[];
   logId: string;
   index: number;
 }
@@ -101,7 +102,8 @@ export class MessageSendProcessor extends WorkerHost {
         const waMessageId = await this.wa.sendText(
           data.tenantId,
           data.groupJid,
-          data.messageText
+          data.messageText,
+          data.imageUrls
         );
         await this.prisma.messageLog.update({
           where: { id: data.logId },

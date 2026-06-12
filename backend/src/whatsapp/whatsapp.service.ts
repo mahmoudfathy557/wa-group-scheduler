@@ -198,12 +198,27 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
   async sendText(
     tenantId: string,
     jid: string,
-    text: string
+    text: string,
+    imageUrls: string[] = []
   ): Promise<string | null> {
     const sock = this.getSocket(tenantId);
     if (!sock) throw new Error("WhatsApp not connected");
-    const res = await sock.sendMessage(jid, { text });
-    return res?.key?.id ?? null;
+
+    if (!imageUrls.length) {
+      const res = await sock.sendMessage(jid, { text });
+      return res?.key?.id ?? null;
+    }
+
+    let firstId: string | null = null;
+    for (let i = 0; i < imageUrls.length; i++) {
+      const res = await sock.sendMessage(jid, {
+        image: { url: imageUrls[i] },
+        caption: i === 0 ? text : undefined
+      });
+      if (!firstId) firstId = res?.key?.id ?? null;
+    }
+
+    return firstId;
   }
 
   private async updateStatus(tenantId: string, status: string) {

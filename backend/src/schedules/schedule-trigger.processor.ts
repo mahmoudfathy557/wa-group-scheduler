@@ -17,6 +17,7 @@ interface SendJobData {
   runId: string;
   groupJid: string;
   messageText: string;
+  imageUrls: string[];
   logId: string;
   // Index in the fan-out — used for jittered staggering.
   index: number;
@@ -83,6 +84,7 @@ export class ScheduleTriggerProcessor extends WorkerHost {
           runId,
           groupJid,
           messageText: schedule.messageText,
+          imageUrls: schedule.imageUrls,
           logId: log.id,
           index: i
         },

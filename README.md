@@ -1,6 +1,6 @@
 # WA-Scheduler
 
-Multi-tenant WhatsApp group message scheduler. Connect a WhatsApp account, sync your groups, and schedule recurring messages with cron expressions and timezone support.
+Multi-tenant WhatsApp group message scheduler. Connect a WhatsApp account, sync your groups, and schedule recurring messages with cron expressions and timezone support, including up to 5 image attachments per scheduled message.
 
 > ⚠️ **Terms of Service warning.** This project uses an unofficial WhatsApp Web library ([baileys](https://github.com/WhiskeySockets/Baileys)). Connecting a personal WhatsApp account this way **violates WhatsApp's Terms of Service** and may result in your account being permanently banned. Use only with throwaway numbers and accept all risk. There is no official WhatsApp API for sending messages to groups outside the WhatsApp Business Platform.
 
@@ -87,6 +87,12 @@ DAILY_MESSAGE_CAP_PER_TENANT=100
 SEND_MIN_DELAY_MS=5000
 SEND_MAX_DELAY_MS=10000
 LOG_RETENTION_DAYS=7
+
+# Cloudinary (for schedule image attachments)
+CLOUDINARY_CLOUD_NAME=<your cloud name>
+CLOUDINARY_API_KEY=<your api key>
+CLOUDINARY_API_SECRET=<your api secret>
+CLOUDINARY_FOLDER=wa-scheduler
 ```
 
 ### 3. Run locally (without Docker)
@@ -143,6 +149,7 @@ The frontend is served at <http://localhost:5173> and the backend at <http://loc
 3. **Sync groups** at `/groups`. The list populates from the linked WhatsApp account.
 4. **Create a schedule** at `/schedules/new`:
    - Pick 1–2 groups.
+   - Optionally attach up to 5 images.
    - Use a near-future cron, e.g. `*/2 * * * *` (every 2 minutes) for testing.
    - Pick your timezone.
 5. Watch `/logs` — within ~2 minutes a `pending` row appears, then flips to `sent` (with a `whatsappMessageId`) or `failed` (with `errorReason`).

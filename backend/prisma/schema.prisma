@@ -81,6 +81,7 @@ model Schedule {
   tenantId       String
   tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   messageText    String
+  imageUrls      String[]  @default([])
   cronExpression String
   timezone       String    @default("UTC")
   status         String    @default("active") // active | paused

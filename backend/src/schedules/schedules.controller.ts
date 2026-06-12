@@ -1,18 +1,33 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Param,
   Patch,
-  Post
+  Post,
+  UploadedFiles,
+  UseInterceptors
 } from "@nestjs/common";
+import { FilesInterceptor } from "@nestjs/platform-express";
 import { SchedulesService } from "./schedules.service";
 import { CreateScheduleDto, UpdateScheduleDto } from "./dto";
+import { CloudinaryService } from "../common/cloudinary.service";
+import { TenantContext } from "../common/tenant-context";
+
+type UploadedImageFile = {
+  mimetype?: string;
+  buffer: Buffer;
+};
 
 @Controller("schedules")
 export class SchedulesController {
-  constructor(private readonly svc: SchedulesService) {}
+  constructor(
+    private readonly svc: SchedulesService,
+    private readonly cloudinary: CloudinaryService,
+    private readonly ctx: TenantContext
+  ) {}
 
   @Get()
   list() {
@@ -25,13 +40,43 @@ export class SchedulesController {
   }
 
   @Post()
-  create(@Body() dto: CreateScheduleDto) {
-    return this.svc.create(dto);
+  @UseInterceptors(
+    FilesInterceptor("images", 5, {
+      limits: { fileSize: 10 * 1024 * 1024 }
+    })
+  )
+  async create(
+    @Body() dto: CreateScheduleDto,
+    @UploadedFiles() files?: UploadedImageFile[]
+  ) {
+    const uploaded = await this.uploadImages(files ?? []);
+    const combined = [...(dto.imageUrls ?? []), ...uploaded];
+    if (combined.length > 5) {
+      throw new BadRequestException("You can attach up to 5 images");
+    }
+    return this.svc.create({ ...dto, imageUrls: combined });
   }
 
   @Patch(":id")
-  update(@Param("id") id: string, @Body() dto: UpdateScheduleDto) {
-    return this.svc.update(id, dto);
+  @UseInterceptors(
+    FilesInterceptor("images", 5, {
+      limits: { fileSize: 10 * 1024 * 1024 }
+    })
+  )
+  async update(
+    @Param("id") id: string,
+    @Body() dto: UpdateScheduleDto,
+    @UploadedFiles() files?: UploadedImageFile[]
+  ) {
+    const uploaded = await this.uploadImages(files ?? []);
+    const combined = [...(dto.imageUrls ?? []), ...uploaded];
+    if (combined.length > 5) {
+      throw new BadRequestException("You can attach up to 5 images");
+    }
+    return this.svc.update(id, {
+      ...dto,
+      ...(files?.length || dto.imageUrls ? { imageUrls: combined } : {})
+    });
   }
 
   @Delete(":id")
@@ -47,5 +92,22 @@ export class SchedulesController {
   @Post(":id/resume")
   resume(@Param("id") id: string) {
     return this.svc.resume(id);
+  }
+
+  private async uploadImages(files: UploadedImageFile[]): Promise<string[]> {
+    if (!files.length) return [];
+
+    for (const file of files) {
+      if (!file.mimetype?.startsWith("image/")) {
+        throw new BadRequestException("Only image files are allowed");
+      }
+    }
+
+    const tenantId = this.ctx.requireTenantId();
+    const urls: string[] = [];
+    for (const file of files) {
+      urls.push(await this.cloudinary.uploadScheduleImage(file, tenantId));
+    }
+    return urls;
   }
 }
