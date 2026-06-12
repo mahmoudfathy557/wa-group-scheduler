@@ -12,3 +12,5 @@ coverage/
 backend/prisma/migrations/dev.db*
 postgres-data/
 redis-data/
+graphify-out
+.graphify-python

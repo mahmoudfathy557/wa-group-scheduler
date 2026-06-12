@@ -4,7 +4,8 @@ import {
   OnModuleInit,
   OnModuleDestroy,
   Inject,
-  forwardRef
+  forwardRef,
+  ServiceUnavailableException
 } from "@nestjs/common";
 import makeWASocket, {
   Browsers,
@@ -190,7 +191,10 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
 
   async listGroups(tenantId: string): Promise<GroupMetadata[]> {
     const sock = this.getSocket(tenantId);
-    if (!sock) throw new Error("WhatsApp not connected");
+    if (!sock)
+      throw new ServiceUnavailableException(
+        `WhatsApp not connected for tenant ${tenantId}. Go to 'Connect' Page first.`
+      );
     const map = await sock.groupFetchAllParticipating();
     return Object.values(map);
   }
@@ -202,7 +206,10 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     imageUrls: string[] = []
   ): Promise<string | null> {
     const sock = this.getSocket(tenantId);
-    if (!sock) throw new Error("WhatsApp not connected");
+    if (!sock)
+      throw new ServiceUnavailableException(
+        `WhatsApp not connected for tenant ${tenantId}. Reconnect and retry.`
+      );
 
     if (!imageUrls.length) {
       const res = await sock.sendMessage(jid, { text });
