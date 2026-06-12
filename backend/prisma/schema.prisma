@@ -1,0 +1,126 @@
+// Prisma schema for WA-Scheduler.
+// Tenant isolation is enforced at the application layer via a Prisma extension
+// that injects `tenantId` into all reads and validates it on writes.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  timezone  String   @default("UTC")
+  createdAt DateTime @default(now())
+
+  users    User[]
+  session  WhatsAppSession?
+  authKeys WhatsAppAuthKey[]
+  groups   Group[]
+  schedules Schedule[]
+  logs     MessageLog[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  tenantId     String   @unique // strict 1:1 user<->tenant in v1
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+}
+
+// Single creds row per tenant (small Buffer of encrypted Baileys creds)
+model WhatsAppSession {
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  encryptedCreds   Bytes?
+  connectionStatus String   @default("disconnected") // connecting | connected | disconnected
+  lastActive       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// Per-key signal store. Avoids rewriting an MB-sized blob on every signal update.
+model WhatsAppAuthKey {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category       String   // e.g. pre-key, session, sender-key, app-state-sync-key, etc.
+  keyId          String
+  encryptedValue Bytes
+  updatedAt      DateTime @updatedAt
+
+  @@unique([tenantId, category, keyId])
+  @@index([tenantId])
+}
+
+model Group {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupJid         String
+  name             String
+  participantCount Int?
+  lastSynced       DateTime @default(now())
+
+  scheduleLinks ScheduleGroup[]
+
+  @@unique([tenantId, groupJid])
+  @@index([tenantId])
+}
+
+model Schedule {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messageText    String
+  cronExpression String
+  timezone       String    @default("UTC")
+  status         String    @default("active") // active | paused
+  nextRunAt      DateTime?
+  // BullMQ repeatable job key (returned from queue.upsertJobScheduler)
+  repeatJobKey   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  groupLinks ScheduleGroup[]
+  logs       MessageLog[]
+
+  @@index([tenantId])
+}
+
+// Explicit join table for Schedule <-> Group (M:N)
+model ScheduleGroup {
+  scheduleId String
+  groupId    String
+  schedule   Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([scheduleId, groupId])
+  @@index([groupId])
+}
+
+model MessageLog {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scheduleId        String
+  schedule          Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  // Groups every fan-out from one cron tick together
+  runId             String
+  groupJid          String
+  status            String   // pending | sent | failed
+  whatsappMessageId String?
+  errorReason       String?
+  createdAt         DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([scheduleId, runId])
+}
