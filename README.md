@@ -27,19 +27,19 @@ Multi-tenant WhatsApp group message scheduler. Connect a WhatsApp account, sync 
 
 ## Locked design decisions
 
-| Concern              | Decision                                                                                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Queue engine         | BullMQ via `@nestjs/bullmq`, repeatable jobs with cron `{ pattern, tz }` or interval `{ every, startDate }`, `jobId == scheduleId`.                        |
-| Tenancy              | One user per tenant. Atomic register transaction. Prisma `$extends` injects `tenantId` into every query.                                                   |
-| Auth                 | JWT bearer, `Authorization: Bearer …`, expiry 12h.                                                                                                         |
-| WhatsApp library     | `baileys` ^6.7.16 (the active maintained fork, **not** `@whiskeysockets/baileys`).                                                                         |
-| Auth state storage   | Per-tenant: encrypted `WhatsAppSession.encryptedCreds` (single row) + `WhatsAppAuthKey` (one row per Signal pre-key). All values AES-256-GCM.              |
-| Encryption           | AES-256-GCM, 12-byte IV, 16-byte auth tag, format `[IV ‖ tag ‖ ciphertext]`. Master key in `ENCRYPTION_KEY` (64 hex chars).                                |
-| Message log statuses | `pending` → `sent` \| `failed` only. No `queued`/`retrying`.                                                                                               |
-| Daily cap            | `DAILY_MESSAGE_CAP_PER_TENANT=100` per tenant per day in tenant timezone. Counts `sent + pending`. Over-cap → `failed:daily_cap_exceeded`, no retry.       |
+| Concern              | Decision                                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Queue engine         | BullMQ via `@nestjs/bullmq`, repeatable jobs with cron `{ pattern, tz }` or interval `{ every, startDate }`, `jobId == scheduleId`.                   |
+| Tenancy              | One user per tenant. Atomic register transaction. Prisma `$extends` injects `tenantId` into every query.                                                  |
+| Auth                 | JWT bearer,`Authorization: Bearer …`, expiry 12h.                                                                                                          |
+| WhatsApp library     | `baileys` ^6.7.16 (the active maintained fork, **not** `@whiskeysockets/baileys`).                                                                  |
+| Auth state storage   | Per-tenant: encrypted `WhatsAppSession.encryptedCreds` (single row) + `WhatsAppAuthKey` (one row per Signal pre-key). All values AES-256-GCM.             |
+| Encryption           | AES-256-GCM, 12-byte IV, 16-byte auth tag, format `[IV ‖ tag ‖ ciphertext]`. Master key in `ENCRYPTION_KEY` (64 hex chars).                             |
+| Message log statuses | `pending` → `sent` \| `failed` only. No `queued`/`retrying`.                                                                                       |
+| Daily cap            | `DAILY_MESSAGE_CAP_PER_TENANT=100` per tenant per day in tenant timezone. Counts `sent + pending`. Over-cap → `failed:daily_cap_exceeded`, no retry.   |
 | Anti-ban             | 5–10 s jittered delay between sends per tenant, Redis `SETNX wa:lock:tenant:{id}` with 30 s TTL serializes, 3 retries with exponential backoff (5 s base). |
-| Log retention        | `LOG_RETENTION_DAYS=7`, daily 03:00 cron prune.                                                                                                            |
-| Single instance      | `docker-compose.yml` has `deploy.replicas: 1`. Scaling out would require migrating Baileys session ownership across instances — out of scope.              |
+| Log retention        | `LOG_RETENTION_DAYS=7`, daily 03:00 cron prune.                                                                                                             |
+| Single instance      | `docker-compose.yml` has `deploy.replicas: 1`. Scaling out would require migrating Baileys session ownership across instances — out of scope.            |
 
 ## Getting started
 
@@ -140,7 +140,7 @@ Then:
 docker compose exec backend npx prisma migrate deploy
 ```
 
-The frontend is served at <http://localhost:5173> and the backend at <http://localhost:3000>.
+The frontend is served at [http://localhost:5173](http://localhost:5173) and the backend at [http://localhost:3000](http://localhost:3000).
 
 ## End-to-end test plan (manual)
 
@@ -180,15 +180,15 @@ Covers `AuthService`, `TenantPrismaService` extension contract, and cron / timez
 
 ## Troubleshooting
 
-| Symptom                                              | Verify quickly                                                                                                         | Fix                                                                                                                                     |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Status stays `connecting`, no QR appears             | Check backend logs for reconnect loops / connection close events.                                                      | Ensure outbound internet access from backend to WhatsApp Web endpoints, then retry from `/connect`.                                     |
+| Symptom                                                | Verify quickly                                                                                                             | Fix                                                                                                                                     |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Status stays `connecting`, no QR appears             | Check backend logs for reconnect loops / connection close events.                                                          | Ensure outbound internet access from backend to WhatsApp Web endpoints, then retry from `/connect`.                                   |
 | QR scans, status flips to `disconnected: logged_out` | Confirm `logged_out` is emitted in `/connect` status or backend logs.                                                  | Re-link with a different WhatsApp number/device state (remove stale linked devices first). Logged-out sessions are wiped automatically. |
 | Logs stay `pending` forever                          | Confirm backend process is running and Redis is reachable (`REDIS_URL`). Look for `MessageSendProcessor` startup logs. | Start/fix Redis connectivity and restart backend worker process. Pending rows will resolve on the next trigger run.                     |
-| Schedule fires at wrong time                         | Compare schedule timezone and tenant timezone to your expected local time.                                             | Set the correct IANA timezone on the schedule and save again. Cron evaluation uses schedule timezone, not server timezone.              |
-| Save fails with cron interval error                  | Check the cron expression frequency.                                                                                   | Use interval >= 30 minutes (for example `*/30 * * * *`, `0 */1 * * *`, `0 */2 * * *`) or less frequent cron patterns.                   |
+| Schedule fires at wrong time                           | Compare schedule timezone and tenant timezone to your expected local time.                                                 | Set the correct IANA timezone on the schedule and save again. Cron evaluation uses schedule timezone, not server timezone.              |
+| Save fails with cron interval error                    | Check the cron expression frequency.                                                                                       | Use interval >= 30 minutes (for example `*/30 * * * *`, `0 */1 * * *`, `0 */2 * * *`) or less frequent cron patterns.             |
 | Sends fail with `daily_cap_exceeded`                 | Check `DAILY_MESSAGE_CAP_PER_TENANT` and today's `pending + sent` volume for the tenant.                               | Increase cap for testing or reduce fan-out/frequency. These failures are intentionally not retried.                                     |
-| `Invalid encryption key` at boot                     | Validate `ENCRYPTION_KEY` length and format.                                                                           | Regenerate with `openssl rand -hex 32`, place exactly 64 hex chars in `.env`, then restart backend.                                     |
+| `Invalid encryption key` at boot                     | Validate `ENCRYPTION_KEY` length and format.                                                                             | Regenerate with `openssl rand -hex 32`, place exactly 64 hex chars in `.env`, then restart backend.                                 |
 
 ## License
 
