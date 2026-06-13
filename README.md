@@ -1,13 +1,6 @@
-<<<<<<< HEAD
-
 # WA-Scheduler
 
-<<<<<<< HEAD
 Multi-tenant WhatsApp group message scheduler. Connect a WhatsApp account, sync your groups, and schedule recurring messages with cron expressions/timezone support or fixed interval mode, including up to 5 image attachments per scheduled message.
-=======
-Multi-tenant WhatsApp group message scheduler. Connect a WhatsApp account, sync your groups, and schedule recurring messages with cron expressions and timezone support, including up to 5 image attachments per scheduled message.
-
-> > > > > > > 28f75a1 (feat: add support for image attachments in scheduled messages)
 
 > ⚠️ **Terms of Service warning.** This project uses an unofficial WhatsApp Web library ([baileys](https://github.com/WhiskeySockets/Baileys)). Connecting a personal WhatsApp account this way **violates WhatsApp's Terms of Service** and may result in your account being permanently banned. Use only with throwaway numbers and accept all risk. There is no official WhatsApp API for sending messages to groups outside the WhatsApp Business Platform.
 
@@ -155,15 +148,11 @@ The frontend is served at <http://localhost:5173> and the backend at <http://loc
 2. **Connect WhatsApp** at `/connect`. Click _Start QR session_, scan the QR with Phone → WhatsApp → Linked devices. Status flips to `connected`.
 3. **Sync groups** at `/groups`. The list populates from the linked WhatsApp account.
 4. **Create a schedule** at `/schedules/new`:
-   <<<<<<< HEAD
    - Pick 1–2 groups (or search/filter the group list first).
    - Optionally attach up to 5 images.
-   - Use either: - a near-future cron for testing (must be >= 30 minutes between runs), or - interval mode (30+ minutes), e.g. every 30 or 60 minutes.
-     =======
-   - Pick 1–2 groups.
-   - Optionally attach up to 5 images.
-   - Use a near-future cron, e.g. `*/2 * * * *` (every 2 minutes) for testing.
-     > > > > > > > 28f75a1 (feat: add support for image attachments in scheduled messages)
+   - Use either:
+     - a near-future cron for testing (must be >= 30 minutes between runs), or
+     - interval mode (30+ minutes), for example every 30 or 60 minutes.
    - Pick your timezone.
 5. Watch `/logs` — a `pending` row appears on each trigger and then flips to `sent` (with a `whatsappMessageId`) or `failed` (with `errorReason`).
 6. **Pause** the schedule on the list page; verify no further runs.
@@ -203,8 +192,4 @@ Covers `AuthService`, `TenantPrismaService` extension contract, and cron / timez
 
 ## License
 
-# Personal/educational use only. **You are solely responsible** for any account bans or other consequences of running this against your WhatsApp account.
-
-# wa-group-scheduler
-
-> > > > > > > 4f068232b64f6cd4e866a6091ad00fae13992945
+Personal/educational use only. **You are solely responsible** for any account bans or other consequences of running this against your WhatsApp account.
