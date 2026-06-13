@@ -1,6 +1,6 @@
 # WA-Scheduler
 
-Multi-tenant WhatsApp group message scheduler. Connect a WhatsApp account, sync your groups, and schedule recurring messages with cron expressions and timezone support, including up to 5 image attachments per scheduled message.
+Multi-tenant WhatsApp group message scheduler. Connect a WhatsApp account, sync your groups, and schedule recurring messages with cron expressions/timezone support or fixed interval mode, including up to 5 image attachments per scheduled message.
 
 > ⚠️ **Terms of Service warning.** This project uses an unofficial WhatsApp Web library ([baileys](https://github.com/WhiskeySockets/Baileys)). Connecting a personal WhatsApp account this way **violates WhatsApp's Terms of Service** and may result in your account being permanently banned. Use only with throwaway numbers and accept all risk. There is no official WhatsApp API for sending messages to groups outside the WhatsApp Business Platform.
 
@@ -29,7 +29,7 @@ Multi-tenant WhatsApp group message scheduler. Connect a WhatsApp account, sync 
 
 | Concern              | Decision                                                                                                                                                   |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Queue engine         | BullMQ via `@nestjs/bullmq`, repeatable jobs `{ pattern, tz }`, `jobId == scheduleId`.                                                                     |
+| Queue engine         | BullMQ via `@nestjs/bullmq`, repeatable jobs with cron `{ pattern, tz }` or interval `{ every, startDate }`, `jobId == scheduleId`.                        |
 | Tenancy              | One user per tenant. Atomic register transaction. Prisma `$extends` injects `tenantId` into every query.                                                   |
 | Auth                 | JWT bearer, `Authorization: Bearer …`, expiry 12h.                                                                                                         |
 | WhatsApp library     | `baileys` ^6.7.16 (the active maintained fork, **not** `@whiskeysockets/baileys`).                                                                         |
@@ -84,8 +84,8 @@ CLIENT_URL=http://localhost:5173
 
 # Sending policy
 DAILY_MESSAGE_CAP_PER_TENANT=100
-SEND_MIN_DELAY_MS=5000
-SEND_MAX_DELAY_MS=10000
+MESSAGE_DELAY_MIN_MS=5000
+MESSAGE_DELAY_MAX_MS=10000
 LOG_RETENTION_DAYS=7
 
 # Cloudinary (for schedule image attachments)
@@ -148,11 +148,13 @@ The frontend is served at <http://localhost:5173> and the backend at <http://loc
 2. **Connect WhatsApp** at `/connect`. Click _Start QR session_, scan the QR with Phone → WhatsApp → Linked devices. Status flips to `connected`.
 3. **Sync groups** at `/groups`. The list populates from the linked WhatsApp account.
 4. **Create a schedule** at `/schedules/new`:
-   - Pick 1–2 groups.
+   - Pick 1–2 groups (or search/filter the group list first).
    - Optionally attach up to 5 images.
-   - Use a near-future cron, e.g. `*/2 * * * *` (every 2 minutes) for testing.
+   - Use either:
+     - a near-future cron for testing (must be >= 30 minutes between runs), or
+     - interval mode (30+ minutes), e.g. every 30 or 60 minutes.
    - Pick your timezone.
-5. Watch `/logs` — within ~2 minutes a `pending` row appears, then flips to `sent` (with a `whatsappMessageId`) or `failed` (with `errorReason`).
+5. Watch `/logs` — a `pending` row appears on each trigger and then flips to `sent` (with a `whatsappMessageId`) or `failed` (with `errorReason`).
 6. **Pause** the schedule on the list page; verify no further runs.
 7. **Resume**; verify firing resumes.
 8. **Edit** the schedule (cron / message / groups). Confirm new fan-outs use the updated payload — schedules in flight at the moment of the edit complete with the _previous_ message; subsequent triggers use the new one.
@@ -162,6 +164,7 @@ The frontend is served at <http://localhost:5173> and the backend at <http://loc
 ## Behavior notes
 
 - **Edit while in flight**: Each trigger pre-creates `MessageLog` rows in a transaction snapshotting the message text + groups at fire time. Editing the schedule afterwards does _not_ alter messages already enqueued for the current run; only future fan-outs see the new content.
+- **Interval schedules**: For expressions like `*/N * * * *` and `0 */N * * *`, the scheduler stores an interval anchor and runs using fixed `every` cadence in BullMQ from that anchor. Reactivating or changing the cron resets the anchor to the current time.
 - **Multiple instances**: Scaling backend replicas > 1 is unsupported. Baileys WebSocket sessions are kept in process memory; a duplicate process would race on Postgres credentials and likely log out the device. The compose file pins `replicas: 1`.
 - **Disconnect / re-link**: On `loggedOut` from WhatsApp the backend automatically wipes that tenant's session + key rows so the next `/whatsapp/connect` starts fresh with a new QR.
 - **Restart safety**: On boot the backend reconnects every tenant whose `WhatsAppSession.encryptedCreds` is non-null and re-registers BullMQ repeatable jobs for every `active` schedule (`SchedulesService.rehydrateRepeats`).
@@ -177,13 +180,15 @@ Covers `AuthService`, `TenantPrismaService` extension contract, and cron / timez
 
 ## Troubleshooting
 
-| Symptom                                              | Likely cause                                                                                                                |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Status stays `connecting`, no QR appears             | Backend can't reach WhatsApp servers — check container egress.                                                              |
-| QR scans, status flips to `disconnected: logged_out` | The phone refused the link (already too many devices, or banned number). Try a different number.                            |
-| Logs stay `pending` forever                          | Worker not running, or Redis unreachable. Check backend logs for `MessageSendProcessor` startup.                            |
-| Schedule fires at wrong time                         | Confirm the schedule timezone matches your phone's. `cron-parser` honors the IANA tz of the schedule, not the server clock. |
-| `Invalid encryption key` at boot                     | `ENCRYPTION_KEY` is not exactly 64 hex chars (32 bytes). Regenerate with `openssl rand -hex 32`.                            |
+| Symptom                                              | Verify quickly                                                                                                         | Fix                                                                                                                                     |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Status stays `connecting`, no QR appears             | Check backend logs for reconnect loops / connection close events.                                                      | Ensure outbound internet access from backend to WhatsApp Web endpoints, then retry from `/connect`.                                     |
+| QR scans, status flips to `disconnected: logged_out` | Confirm `logged_out` is emitted in `/connect` status or backend logs.                                                  | Re-link with a different WhatsApp number/device state (remove stale linked devices first). Logged-out sessions are wiped automatically. |
+| Logs stay `pending` forever                          | Confirm backend process is running and Redis is reachable (`REDIS_URL`). Look for `MessageSendProcessor` startup logs. | Start/fix Redis connectivity and restart backend worker process. Pending rows will resolve on the next trigger run.                     |
+| Schedule fires at wrong time                         | Compare schedule timezone and tenant timezone to your expected local time.                                             | Set the correct IANA timezone on the schedule and save again. Cron evaluation uses schedule timezone, not server timezone.              |
+| Save fails with cron interval error                  | Check the cron expression frequency.                                                                                   | Use interval >= 30 minutes (for example `*/30 * * * *`, `0 */1 * * *`, `0 */2 * * *`) or less frequent cron patterns.                   |
+| Sends fail with `daily_cap_exceeded`                 | Check `DAILY_MESSAGE_CAP_PER_TENANT` and today's `pending + sent` volume for the tenant.                               | Increase cap for testing or reduce fan-out/frequency. These failures are intentionally not retried.                                     |
+| `Invalid encryption key` at boot                     | Validate `ENCRYPTION_KEY` length and format.                                                                           | Regenerate with `openssl rand -hex 32`, place exactly 64 hex chars in `.env`, then restart backend.                                     |
 
 ## License
 
