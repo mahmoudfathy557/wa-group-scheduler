@@ -74,6 +74,7 @@ services:
       - backend
     ports:
       - "80:80"
+      - "443:443"
     read_only: true
     tmpfs:
       - /var/cache/nginx
@@ -82,13 +83,24 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - ./frontend/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/${NGINX_CONF:-nginx.prod.conf}:/etc/nginx/conf.d/default.conf:ro
+      - certbot-www:/var/www/certbot:ro
+      - letsencrypt:/etc/letsencrypt:ro
     networks:
       - app-internal
+
+  certbot:
+    image: certbot/certbot:latest
+    profiles: ["ops"]
+    volumes:
+      - certbot-www:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt
 
 volumes:
   postgres-data:
   redis-data:
+  certbot-www:
+  letsencrypt:
 
 networks:
   app-internal:
