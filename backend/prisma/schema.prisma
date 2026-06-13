@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  password         String
+  timezone         String            @default("UTC")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  whatsappSession  WhatsAppSession?
+  whatsappAuthKeys WhatsAppAuthKey[]
+  groups           Group[]
+  schedules        Schedule[]
+  messageLogs      MessageLog[]
+
+  @@map("users")
+}
+
+model WhatsAppSession {
+  id             String   @id @default(uuid())
+  tenantId       String   @unique
+  encryptedCreds Bytes?
+  status         String   @default("disconnected")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant User @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_sessions")
+}
+
+model WhatsAppAuthKey {
+  id            String   @id @default(uuid())
+  tenantId      String
+  keyType       String
+  keyId         String
+  encryptedData Bytes
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant User @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, keyType, keyId])
+  @@map("whatsapp_auth_keys")
+}
+
+model Group {
+  id             String          @id @default(uuid())
+  tenantId       String
+  waGroupId      String
+  name           String
+  description    String?
+  syncedAt       DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  tenant         User            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scheduleGroups ScheduleGroup[]
+
+  @@unique([tenantId, waGroupId])
+  @@map("groups")
+}
+
+model Schedule {
+  id             String          @id @default(uuid())
+  tenantId       String
+  name           String
+  message        String
+  cronExpr       String?
+  timezone       String          @default("UTC")
+  intervalMs     BigInt?
+  anchorDate     DateTime?
+  imageUrls      String[]        @default([])
+  status         String          @default("active")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  tenant         User            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scheduleGroups ScheduleGroup[]
+  messageLogs    MessageLog[]
+
+  @@map("schedules")
+}
+
+model ScheduleGroup {
+  id         String   @id @default(uuid())
+  scheduleId String
+  groupId    String
+
+  schedule Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, groupId])
+  @@map("schedule_groups")
+}
+
+model MessageLog {
+  id                String   @id @default(uuid())
+  tenantId          String
+  scheduleId        String
+  groupId           String
+  waGroupId         String
+  status            String   @default("pending")
+  errorReason       String?
+  whatsappMessageId String?
+  message           String
+  imageUrls         String[] @default([])
+  scheduledAt       DateTime
+  sentAt            DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant   User     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schedule Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@map("message_logs")
+}
