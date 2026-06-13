@@ -1,12 +1,12 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
 import { getDayEndInTimezone, getDayStartInTimezone } from '../schedules/cron.helpers';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import { REDIS_CLIENT } from './queues.module';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 const DAILY_CAP = parseInt(process.env.DAILY_MESSAGE_CAP_PER_TENANT || '100', 10);
 const DELAY_MIN = parseInt(process.env.MESSAGE_DELAY_MIN_MS || '5000', 10);
 const DELAY_MAX = parseInt(process.env.MESSAGE_DELAY_MAX_MS || '10000', 10);
@@ -26,6 +26,7 @@ export class MessageSendProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsAppService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {
     super();
   }

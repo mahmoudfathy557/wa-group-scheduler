@@ -33,7 +33,7 @@ services:
       dockerfile: Dockerfile
     env_file: .env
     environment:
-      DATABASE_URL: ******postgres:5432/wa_scheduler
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-wa_scheduler}
       REDIS_URL: redis://redis:6379
     ports:
       - '3000:3000'

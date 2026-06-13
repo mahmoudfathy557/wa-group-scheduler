@@ -24,17 +24,20 @@ export class CloudinaryController {
       limits: { files: 5 },
     }),
   )
-  async uploadImages(@UploadedFiles() files: Express.Multer.File[]) {
-    if (!files?.length) {
+  async uploadImages(@UploadedFiles() files: Express.Multer.File[] | undefined) {
+    // Ensure files is always an array (guards against parameter tampering)
+    const fileList = Array.isArray(files) ? files : [];
+
+    if (!fileList.length) {
       throw new BadRequestException('No files provided');
     }
 
-    if (files.length > 5) {
+    if (fileList.length > 5) {
       throw new BadRequestException('Maximum 5 images allowed');
     }
 
     const urls = await Promise.all(
-      files.map((file) => this.cloudinaryService.uploadBuffer(file.buffer, uuidv4())),
+      fileList.map((file) => this.cloudinaryService.uploadBuffer(file.buffer, uuidv4())),
     );
 
     return { urls };

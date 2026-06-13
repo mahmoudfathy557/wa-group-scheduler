@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
+import QRCode from 'qrcode';
 import api from '../lib/api';
 import { getToken } from '../lib/auth';
 import { Wifi, WifiOff, RefreshCw, LogOut } from 'lucide-react';
@@ -8,6 +9,21 @@ import { Wifi, WifiOff, RefreshCw, LogOut } from 'lucide-react';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 type WaStatus = 'disconnected' | 'connecting' | 'connected' | 'qr' | string;
+
+/** Renders a QR code locally onto a <canvas> — no external requests */
+function QRCanvas({ data }: { data: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (canvasRef.current && data) {
+      QRCode.toCanvas(canvasRef.current, data, { width: 200, margin: 2 }).catch(
+        console.error,
+      );
+    }
+  }, [data]);
+
+  return <canvas ref={canvasRef} className="w-48 h-48" />;
+}
 
 export default function ConnectPage() {
   const queryClient = useQueryClient();
@@ -122,11 +138,7 @@ export default function ConnectPage() {
               Phone → WhatsApp → Linked Devices → Link a Device
             </p>
             <div className="flex justify-center p-4 bg-white border rounded-lg">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`}
-                alt="WhatsApp QR Code"
-                className="w-48 h-48"
-              />
+              <QRCanvas data={qrCode} />
             </div>
           </div>
         )}
