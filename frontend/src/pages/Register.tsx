@@ -44,45 +44,68 @@ export function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 py-8">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="bg-white p-8 rounded shadow w-full max-w-md space-y-4"
+        className="bg-white p-6 sm:p-8 rounded-lg shadow-md w-full max-w-sm space-y-4"
       >
-        <h1 className="text-2xl font-semibold">Create your workspace</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+          Create workspace
+        </h1>
+        <p className="text-sm sm:text-base text-gray-600">
+          Set up your WhatsApp scheduler
+        </p>
         <div>
-          <label className="block text-sm mb-1">Workspace name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Workspace name
+          </label>
           <input
             {...register("tenantName")}
-            className="w-full border rounded px-3 py-2"
+            placeholder="My Organization"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
           />
           {errors.tenantName && (
-            <p className="text-red-600 text-sm">{errors.tenantName.message}</p>
+            <p className="text-red-600 text-xs sm:text-sm mt-1">
+              {errors.tenantName.message}
+            </p>
           )}
         </div>
         <div>
-          <label className="block text-sm mb-1">Email</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Email address
+          </label>
           <input
             {...register("email")}
-            className="w-full border rounded px-3 py-2"
+            type="email"
+            placeholder="you@example.com"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
           />
           {errors.email && (
-            <p className="text-red-600 text-sm">{errors.email.message}</p>
+            <p className="text-red-600 text-xs sm:text-sm mt-1">
+              {errors.email.message}
+            </p>
           )}
         </div>
         <div>
-          <label className="block text-sm mb-1">Password</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Password
+          </label>
           <input
             type="password"
             {...register("password")}
-            className="w-full border rounded px-3 py-2"
+            placeholder="••••••••"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
           />
           {errors.password && (
-            <p className="text-red-600 text-sm">{errors.password.message}</p>
+            <p className="text-red-600 text-xs sm:text-sm mt-1">
+              {errors.password.message}
+            </p>
           )}
         </div>
         <div>
-          <label className="block text-sm mb-1">Timezone</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Timezone
+          </label>
           <Controller
             name="timezone"
             control={control}
@@ -98,16 +121,21 @@ export function Register() {
         </div>
         <button
           disabled={busy}
-          className="w-full bg-emerald-600 text-white py-2 rounded disabled:opacity-50"
+          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition text-sm sm:text-base"
         >
           {busy ? "Creating…" : "Create workspace"}
         </button>
-        <p className="text-sm text-gray-600">
-          Already have one?{" "}
-          <Link to="/login" className="text-emerald-700">
-            Sign in
-          </Link>
-        </p>
+        <div className="border-t pt-4">
+          <p className="text-xs sm:text-sm text-gray-600 text-center">
+            Already have one?{" "}
+            <Link
+              to="/login"
+              className="font-semibold text-emerald-600 hover:text-emerald-700"
+            >
+              Sign in
+            </Link>
+          </p>
+        </div>
       </form>
     </div>
   );

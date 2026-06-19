@@ -5,6 +5,7 @@ import {
   NavLink,
   useNavigate
 } from "react-router-dom";
+import { useState } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
@@ -17,17 +18,22 @@ import { Logs } from "./pages/Logs";
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   if (!user) return <Navigate to="/login" replace />;
 
   const link = ({ isActive }: { isActive: boolean }) =>
-    `px-3 py-2 rounded text-sm ${isActive ? "bg-emerald-600 text-white" : "text-gray-700 hover:bg-gray-100"}`;
+    `block px-3 py-2 rounded text-sm font-medium transition-colors ${
+      isActive ? "bg-emerald-600 text-white" : "text-gray-700 hover:bg-gray-100"
+    }`;
 
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b bg-white">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="font-semibold">WA Scheduler</div>
-          <nav className="flex gap-1">
+          <h1 className="text-lg sm:text-xl font-semibold text-gray-900">
+            WA Scheduler
+          </h1>
+          <nav className="hidden md:flex gap-1">
             <NavLink to="/connect" className={link}>
               Connect
             </NavLink>
@@ -41,21 +47,74 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
               Logs
             </NavLink>
           </nav>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-500">{user.email}</span>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={() => setMobileNavOpen(!mobileNavOpen)}
+              className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
+            <span className="hidden sm:inline text-xs sm:text-sm text-gray-500">
+              {user.email}
+            </span>
             <button
               onClick={() => {
                 logout();
                 navigate("/login");
               }}
-              className="text-sm text-gray-600 hover:text-gray-900"
+              className="text-xs sm:text-sm text-gray-600 hover:text-gray-900 font-medium"
             >
               Logout
             </button>
           </div>
         </div>
+        {/* Mobile menu */}
+        {mobileNavOpen && (
+          <nav className="md:hidden border-t bg-gray-50 px-4 py-2">
+            <NavLink
+              to="/connect"
+              className={({ isActive }) => link({ isActive })}
+              onClick={() => setMobileNavOpen(false)}
+            >
+              Connect
+            </NavLink>
+            <NavLink
+              to="/groups"
+              className={({ isActive }) => link({ isActive })}
+              onClick={() => setMobileNavOpen(false)}
+            >
+              Groups
+            </NavLink>
+            <NavLink
+              to="/schedules"
+              className={({ isActive }) => link({ isActive })}
+              onClick={() => setMobileNavOpen(false)}
+            >
+              Schedules
+            </NavLink>
+            <NavLink
+              to="/logs"
+              className={({ isActive }) => link({ isActive })}
+              onClick={() => setMobileNavOpen(false)}
+            >
+              Logs
+            </NavLink>
+          </nav>
+        )}
       </header>
-      <main className="flex-1 max-w-6xl mx-auto px-4 py-6 w-full">
+      <main className="flex-1 max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 w-full">
         {children}
       </main>
     </div>

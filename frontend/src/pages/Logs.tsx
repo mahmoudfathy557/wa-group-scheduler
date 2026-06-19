@@ -24,75 +24,100 @@ export function Logs() {
   });
 
   return (
-    <div className="bg-white p-6 rounded shadow">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">Message logs</h2>
-        <div className="flex items-center gap-2">
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            <option value="">All</option>
-            <option value="pending">Pending</option>
-            <option value="sent">Sent</option>
-            <option value="failed">Failed</option>
-          </select>
-          <button
-            onClick={() => refetch()}
-            className="border rounded px-3 py-1 text-sm"
-          >
-            Refresh
-          </button>
+    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="p-4 sm:p-6 border-b">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+            Message logs
+          </h2>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition flex-1 sm:flex-none"
+            >
+              <option value="">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="sent">Sent</option>
+              <option value="failed">Failed</option>
+            </select>
+            <button
+              onClick={() => refetch()}
+              className="border border-gray-300 hover:bg-gray-50 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition"
+            >
+              ↻ Refresh
+            </button>
+          </div>
         </div>
       </div>
 
-      {isLoading ? (
-        <p>Loading…</p>
-      ) : !data || data.length === 0 ? (
-        <p className="text-gray-600">No logs yet.</p>
-      ) : (
-        <table className="w-full text-sm">
-          <thead className="text-left border-b">
-            <tr>
-              <th className="py-2">Time</th>
-              <th>Group</th>
-              <th>Status</th>
-              <th>Error / Msg ID</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((l) => (
-              <tr key={l.id} className="border-b">
-                <td className="py-2 whitespace-nowrap">
-                  {new Date(l.createdAt).toLocaleString()}
-                </td>
-                <td className="font-mono text-xs">{l.groupJid}</td>
-                <td>
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs ${
-                      l.status === "sent"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : l.status === "failed"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-amber-100 text-amber-700"
-                    }`}
-                  >
-                    {l.status}
-                  </span>
-                </td>
-                <td className="text-xs text-gray-600">
-                  {l.errorReason || l.whatsappMessageId || "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <div className="p-4 sm:p-6">
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <p className="text-gray-500">Loading logs…</p>
+          </div>
+        ) : !data || data.length === 0 ? (
+          <p className="text-center text-gray-500 py-8">No logs yet.</p>
+        ) : (
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <table className="w-full text-xs sm:text-sm">
+              <thead className="bg-gray-50 text-left border-b border-gray-200">
+                <tr>
+                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700">
+                    Time
+                  </th>
+                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden sm:table-cell">
+                    Group
+                  </th>
+                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700">
+                    Status
+                  </th>
+                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden md:table-cell">
+                    Details
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {data.map((l) => (
+                  <tr key={l.id} className="hover:bg-gray-50">
+                    <td className="px-4 sm:px-0 py-3">
+                      <p className="text-gray-900 font-medium text-xs sm:text-sm">
+                        {new Date(l.createdAt).toLocaleString()}
+                      </p>
+                      <div className="sm:hidden text-xs text-gray-500 mt-1 break-all">
+                        {l.groupJid}
+                      </div>
+                    </td>
+                    <td className="px-4 sm:px-0 py-3 font-mono text-xs text-gray-600 hidden sm:table-cell break-all max-w-xs">
+                      {l.groupJid}
+                    </td>
+                    <td className="px-4 sm:px-0 py-3">
+                      <span
+                        className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${
+                          l.status === "sent"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : l.status === "failed"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {l.status}
+                      </span>
+                    </td>
+                    <td className="px-4 sm:px-0 py-3 text-xs text-gray-600 hidden md:table-cell break-all">
+                      {l.errorReason || l.whatsappMessageId || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
-      <p className="text-xs text-gray-500 mt-4">
+      <div className="p-4 sm:p-6 bg-gray-50 border-t text-xs text-gray-500">
         Logs auto-pruned after 7 days.
-      </p>
+      </div>
     </div>
   );
 }

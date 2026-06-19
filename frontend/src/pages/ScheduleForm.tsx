@@ -170,40 +170,50 @@ export function ScheduleForm() {
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="bg-white p-6 rounded shadow max-w-2xl space-y-4"
+      className="bg-white rounded-lg shadow-md p-4 sm:p-6 max-w-full sm:max-w-2xl space-y-5"
     >
-      <h2 className="text-xl font-semibold">
+      <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
         {isEdit ? "Edit schedule" : "New schedule"}
       </h2>
 
       <div>
-        <label className="block text-sm mb-1">Message text</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Message text
+        </label>
         <div className="relative">
           <textarea
             {...register("messageText")}
-            rows={4}
-            className="w-full border rounded px-3 py-2"
+            rows={5}
+            placeholder="Enter the message you want to send"
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition resize-vertical"
           />
           <button
             type="button"
-            className="absolute right-2 bottom-2 border rounded px-2 py-1 text-sm bg-white"
+            className="absolute right-3 bottom-3 border border-gray-300 hover:bg-gray-50 rounded-lg px-3 py-1.5 text-xs sm:text-sm bg-white font-medium transition"
             onClick={() => setShowEmojiPicker((s) => !s)}
           >
-            Emoji
+            😀 Emoji
           </button>
           {showEmojiPicker && (
-            <div className="absolute right-0 mt-2 z-20">
+            <div
+              className="absolute right-0 mt-2 z-20 border border-gray-200 rounded-lg shadow-lg bg-white"
+              style={{ maxHeight: "400px", overflowY: "auto" }}
+            >
               <EmojiPicker onEmojiClick={onEmojiClick} />
             </div>
           )}
         </div>
         {errors.messageText && (
-          <p className="text-red-600 text-sm">{errors.messageText.message}</p>
+          <p className="text-red-600 text-xs sm:text-sm mt-1">
+            {errors.messageText.message}
+          </p>
         )}
       </div>
 
       <div>
-        <label className="block text-sm mb-1">Images (up to 5)</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Images (up to 5)
+        </label>
         <input
           type="file"
           accept="image/*"
@@ -212,27 +222,27 @@ export function ScheduleForm() {
             onSelectImages(e.target.files);
             e.currentTarget.value = "";
           }}
-          className="block w-full text-sm"
+          className="block w-full text-xs sm:text-sm border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
         />
 
         {(imageUrls.length > 0 || filePreviews.length > 0) && (
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {imageUrls.map((url) => (
               <div
                 key={url}
-                className="relative border rounded overflow-hidden"
+                className="relative border-2 border-gray-200 rounded-lg overflow-hidden group hover:border-emerald-400 transition"
               >
                 <img
                   src={url}
                   alt="Schedule attachment"
-                  className="w-full h-28 object-cover"
+                  className="w-full h-24 sm:h-28 object-cover"
                 />
                 <button
                   type="button"
                   onClick={() => removeExistingImage(url)}
-                  className="absolute top-1 right-1 bg-white border rounded px-1 text-xs"
+                  className="absolute top-1 right-1 bg-white border border-gray-300 hover:bg-red-50 rounded-md px-2 py-1 text-xs font-medium opacity-0 group-hover:opacity-100 transition"
                 >
-                  Remove
+                  ✕
                 </button>
               </div>
             ))}
@@ -240,19 +250,19 @@ export function ScheduleForm() {
             {filePreviews.map((file, idx) => (
               <div
                 key={`${file.name}-${idx}`}
-                className="relative border rounded overflow-hidden"
+                className="relative border-2 border-dashed border-emerald-300 rounded-lg overflow-hidden group hover:border-emerald-500 transition"
               >
                 <img
                   src={file.url}
                   alt={file.name}
-                  className="w-full h-28 object-cover"
+                  className="w-full h-24 sm:h-28 object-cover"
                 />
                 <button
                   type="button"
                   onClick={() => removeSelectedFile(idx)}
-                  className="absolute top-1 right-1 bg-white border rounded px-1 text-xs"
+                  className="absolute top-1 right-1 bg-white border border-gray-300 hover:bg-red-50 rounded-md px-2 py-1 text-xs font-medium opacity-0 group-hover:opacity-100 transition"
                 >
-                  Remove
+                  ✕
                 </button>
               </div>
             ))}
@@ -261,7 +271,9 @@ export function ScheduleForm() {
       </div>
 
       <div>
-        <label className="block text-sm mb-1">Schedule</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Schedule
+        </label>
         <Controller
           name="cronExpression"
           control={control}
@@ -276,7 +288,9 @@ export function ScheduleForm() {
       </div>
 
       <div>
-        <label className="block text-sm mb-1">Timezone</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Timezone
+        </label>
         <Controller
           name="timezone"
           control={control}
@@ -292,7 +306,9 @@ export function ScheduleForm() {
       </div>
 
       <div>
-        <label className="block text-sm mb-1">Groups</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Groups
+        </label>
         <Controller
           name="groupIds"
           control={control}
@@ -303,12 +319,12 @@ export function ScheduleForm() {
                 placeholder="Search groups..."
                 value={groupFilter}
                 onChange={(e) => setGroupFilter(e.target.value)}
-                className="w-full border rounded px-3 py-2 mb-2 text-sm"
+                className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
               />
-              <div className="border rounded p-2 max-h-60 overflow-auto">
+              <div className="border border-gray-300 rounded-lg p-3 max-h-64 overflow-auto">
                 {!groups || groups.length === 0 ? (
                   <p className="text-sm text-gray-500">
-                    No groups — sync from the Groups page first.
+                    No groups found. Sync from the Groups page first.
                   </p>
                 ) : (
                   groups
@@ -318,7 +334,7 @@ export function ScheduleForm() {
                     .map((g) => (
                       <label
                         key={g.id}
-                        className="flex items-center gap-2 py-1"
+                        className="flex items-center gap-3 py-2 px-2 hover:bg-gray-50 rounded-lg cursor-pointer transition"
                       >
                         <input
                           type="checkbox"
@@ -329,8 +345,9 @@ export function ScheduleForm() {
                               : field.value.filter((x) => x !== g.id);
                             field.onChange(next);
                           }}
+                          className="w-4 h-4 text-emerald-600 rounded focus:ring-2 focus:ring-emerald-500"
                         />
-                        <span className="text-sm">{g.name}</span>
+                        <span className="text-sm text-gray-900">{g.name}</span>
                       </label>
                     ))
                 )}
@@ -339,32 +356,36 @@ export function ScheduleForm() {
           )}
         />
         {errors.groupIds && (
-          <p className="text-red-600 text-sm">
+          <p className="text-red-600 text-xs sm:text-sm mt-2">
             {errors.groupIds.message as string}
           </p>
         )}
       </div>
 
-      <div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" {...register("runNow")} />
-          <span>
-            Send once immediately on save, then continue scheduled runs
+      <div className="border-t pt-5">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            {...register("runNow")}
+            className="w-4 h-4 text-emerald-600 rounded focus:ring-2 focus:ring-emerald-500"
+          />
+          <span className="text-sm sm:text-base text-gray-700">
+            Send immediately, then continue scheduled runs
           </span>
         </label>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <button
           disabled={isSubmitting}
-          className="bg-emerald-600 text-white px-4 py-2 rounded disabled:opacity-50"
+          className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6 py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition text-sm sm:text-base"
         >
-          {isSubmitting ? "Saving…" : "Save"}
+          {isSubmitting ? "Saving…" : "Save schedule"}
         </button>
         <button
           type="button"
           onClick={() => nav("/schedules")}
-          className="px-4 py-2 rounded border"
+          className="flex-1 sm:flex-none border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium px-6 py-2.5 rounded-lg transition text-sm sm:text-base"
         >
           Cancel
         </button>

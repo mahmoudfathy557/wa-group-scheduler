@@ -294,7 +294,7 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
       : undefined;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Mode tabs */}
       <div className="flex flex-wrap gap-2">
         {MODE_LABELS.map(({ key, label }) => (
@@ -302,10 +302,10 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
             key={key}
             type="button"
             onClick={() => setMode(key)}
-            className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+            className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium border transition-colors ${
               mode === key
-                ? "bg-emerald-600 text-white border-emerald-600"
-                : "bg-white text-gray-700 border-gray-300 hover:border-emerald-400"
+                ? "bg-emerald-600 text-white border-emerald-600 shadow-md"
+                : "bg-white text-gray-700 border-gray-300 hover:border-emerald-400 hover:bg-gray-50"
             }`}
           >
             {label}
@@ -314,7 +314,7 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
       </div>
 
       {/* Contextual fields */}
-      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+      <div className="bg-gray-50 rounded-lg p-4 sm:p-5 space-y-4">
         {mode === "daily" && (
           <TimePicker
             hour={hour}
@@ -327,19 +327,19 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
         {mode === "weekly" && (
           <>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-3">
                 Days of week
               </label>
-              <div className="flex gap-1 flex-wrap">
+              <div className="flex gap-2 flex-wrap">
                 {DAYS.map((d) => (
                   <button
                     key={d.value}
                     type="button"
                     onClick={() => toggleDay(d.value)}
-                    className={`w-10 h-10 rounded-full text-sm font-medium border transition-colors ${
+                    className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full text-xs sm:text-sm font-semibold border-2 transition-colors ${
                       weekDays.includes(d.value)
-                        ? "bg-emerald-600 text-white border-emerald-600"
-                        : "bg-white text-gray-700 border-gray-300 hover:border-emerald-400"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-md"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-emerald-400 hover:bg-gray-100"
                     }`}
                   >
                     {d.label}
@@ -347,8 +347,8 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
                 ))}
               </div>
               {weekDays.length === 0 && (
-                <p className="text-amber-600 text-xs mt-1">
-                  Select at least one day
+                <p className="text-amber-700 text-xs mt-2 font-medium">
+                  ⚠ Select at least one day
                 </p>
               )}
             </div>
@@ -364,13 +364,13 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
         {mode === "monthly" && (
           <>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                 Day of month
               </label>
               <select
                 value={monthDay}
                 onChange={(e) => setMonthDay(Number(e.target.value))}
-                className="border rounded px-2 py-1 text-sm"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
               >
                 {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
                   <option key={d} value={d}>
@@ -390,20 +390,20 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
         )}
 
         {mode === "hourly" && (
-          <p className="text-sm text-gray-600">
-            Triggers at the top of every hour (e.g. 1:00, 2:00, 3:00…)
+          <p className="text-sm text-gray-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            ⓘ Triggers at the top of every hour (1:00, 2:00, 3:00…)
           </p>
         )}
 
         {mode === "interval" && (
           <div>
-            <label className="block text-xs text-gray-500 mb-1">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
               Repeat every
             </label>
             <select
               value={intervalMin}
               onChange={(e) => setIntervalMin(Number(e.target.value))}
-              className="border rounded px-2 py-1 text-sm"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
             >
               {INTERVALS_MIN.map((n) => (
                 <option key={n} value={n}>
@@ -413,21 +413,21 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-gray-500 mt-1">
-              Minimum interval: 30 minutes. Runs from save time (e.g. :07, :37).
+            <p className="text-xs text-gray-500 mt-2">
+              Minimum interval: 30 minutes. Runs from save time.
             </p>
           </div>
         )}
 
         {mode === "custom" && (
           <div>
-            <label className="block text-xs text-gray-500 mb-1">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
               Cron expression{" "}
               <a
                 href="https://crontab.guru"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline text-emerald-600"
+                className="text-emerald-600 hover:text-emerald-700 font-semibold"
               >
                 (help ↗)
               </a>
@@ -435,12 +435,12 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
             <input
               value={custom}
               onChange={(e) => setCustom(e.target.value)}
-              className="w-full border rounded px-3 py-2 font-mono text-sm"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
               placeholder="0 9 * * *"
             />
             {customIntervalError && (
-              <p className="text-amber-700 text-xs mt-1">
-                {customIntervalError}
+              <p className="text-amber-700 text-xs mt-2 font-medium">
+                ⚠ {customIntervalError}
               </p>
             )}
           </div>
@@ -449,18 +449,23 @@ export function CronBuilder({ value, onChange, error }: CronBuilderProps) {
 
       {/* Summary badge */}
       {mode !== "custom" && (
-        <p className="text-xs text-gray-500">
-          Schedule:{" "}
-          <span className="font-medium text-gray-700">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs sm:text-sm">
+          <p className="text-gray-700">
+            <span className="font-semibold">Schedule:</span>{" "}
             {humanize(generated)}
-          </span>
-          {" · "}
-          <code className="bg-gray-100 px-1 rounded">{generated}</code>
-        </p>
+          </p>
+          <p className="text-gray-500 mt-1 break-all">
+            <code className="bg-white border border-gray-200 px-2 py-1 rounded font-mono text-xs">
+              {generated}
+            </code>
+          </p>
+        </div>
       )}
 
       {(error || customIntervalError) && (
-        <p className="text-red-600 text-sm">{error || customIntervalError}</p>
+        <p className="text-red-600 text-sm font-medium bg-red-50 border border-red-200 rounded-lg p-3">
+          {error || customIntervalError}
+        </p>
       )}
     </div>
   );
@@ -480,12 +485,12 @@ function TimePicker({
   onMinute: (m: number) => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <label className="text-xs text-gray-500">At</label>
+    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-2">
+      <label className="text-xs sm:text-sm font-medium text-gray-700">At</label>
       <select
         value={hour}
         onChange={(e) => onHour(Number(e.target.value))}
-        className="border rounded px-2 py-1 text-sm"
+        className="flex-1 sm:flex-initial border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
       >
         {HOURS.map((h) => (
           <option key={h} value={h}>
@@ -493,11 +498,11 @@ function TimePicker({
           </option>
         ))}
       </select>
-      <span className="text-gray-500">:</span>
+      <span className="text-gray-500 hidden sm:inline">:</span>
       <select
         value={minute}
         onChange={(e) => onMinute(Number(e.target.value))}
-        className="border rounded px-2 py-1 text-sm"
+        className="flex-1 sm:flex-initial border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
       >
         {MINUTES.map((m) => (
           <option key={m} value={m}>
