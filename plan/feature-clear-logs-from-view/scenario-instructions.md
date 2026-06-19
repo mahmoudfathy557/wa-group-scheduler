@@ -1,29 +1,36 @@
-# Task: Add Clear Logs from View Action
+# Task: Clear Logs from View Feature
 
 **Task ID**: FEATURE-LOGS-CLEAR-VIEW  
 **Created**: 2026-06-19  
 **Type**: feature  
 **Scope**: full-stack  
-**Status**: ⏳ **Pending Start**
+**Status**: ✅ **Ready for Execution**
 
 ---
 
 ## Objective
 
-Add a new UI button on the logs page that clears currently visible logs from the page without deleting existing `MessageLog` rows.
+Implement a "clear logs from view" feature that hides logs viewed before a certain timestamp, allowing users to focus on recent logs without deleting data. Logs are soft-deleted from the user's view via a `LogViewState` marker.
 
-**Target Outcome**: User can click a clear action and no previously seen logs appear on the logs page, while all raw log rows remain intact in PostgreSQL.
+**Target Outcome**:
+
+- User clicks "Clear Logs" button → logs before that moment are hidden from `/logs` view
+- Old logs remain in DB (for auditing/compliance)
+- Endpoint: `POST /logs/clear-view` (backend)
+- Button: "Clear Logs" in `Logs.tsx` (frontend)
+- Multi-tenant safe: each tenant has own `LogViewState`
 
 ---
 
 ## Current State Snapshot
 
-| Component          | Version/State                 | File Path                                                          | Notes                                |
-| ------------------ | ----------------------------- | ------------------------------------------------------------------ | ------------------------------------ |
-| Backend Logs API   | NestJS controller/service     | `backend/src/logs/`                                                | Supports list + stats only           |
-| Persistence        | Prisma + PostgreSQL 16        | `backend/prisma/schema.prisma`                                     | `MessageLog` has no view-state field |
-| Frontend Logs Page | React + React Query           | `frontend/src/pages/Logs.tsx`                                      | Has status filter + refresh only     |
-| Auth/Tenancy       | JWT + tenant Prisma extension | `backend/src/auth/`, `backend/src/prisma/tenant-prisma.service.ts` | Tenant-scoped behavior required      |
+| Component   | Version/State          | File Path                      | Notes                               |
+| ----------- | ---------------------- | ------------------------------ | ----------------------------------- |
+| Framework   | NestJS 10 + Bull Queue | `backend/`                     | Message processing via BullMQ       |
+| Database    | Prisma + PostgreSQL 16 | `backend/prisma/schema.prisma` | Multi-tenant via `tenantId`         |
+| Frontend    | React 18 + Vite        | `frontend/src/`                | Real-time via Socket.IO             |
+| Auth        | JWT (12h expiry)       | `backend/src/auth/`            | Tenant-scoped                       |
+| Logs Module | Partially built        | `backend/src/logs/`            | Controllers, services, schema exist |
 
 ---
 
@@ -31,18 +38,22 @@ Add a new UI button on the logs page that clears currently visible logs from the
 
 ### ✅ Included
 
-- Add clear action in logs UI
-- Add backend endpoint(s) for log view-state clear marker
-- Add tenant-scoped filtering so cleared logs are hidden from list response
-- Unit tests for backend log-view-state behavior
-- Frontend behavior tests (if test harness exists) or explicit manual validation checklist
-- DB migration(s) only if needed by selected approach
+- Backend: `LogViewState` model (tenant-scoped, tracks `clearedAt` timestamp)
+- Backend: `POST /logs/clear-view` endpoint (authenticated, sets `clearedAt` for tenant)
+- Backend: Modify `GET /logs` query to filter `createdAt > tenant.logViewState.clearedAt`
+- Backend: Unit tests for clear-view logic
+- Backend: Integration tests for multi-tenant isolation
+- Frontend: "Clear Logs" button in `Logs.tsx`
+- Frontend: Call `POST /logs/clear-view` on click, refresh logs list
+- Frontend: Confirmation dialog before clearing (UX best practice)
+- Database: Migration to add `LogViewState` table (if not exists)
 
 ### ❌ Excluded
 
-- Physical deletion of `MessageLog` rows
-- Changing retention policy or cleanup schedule
-- Bulk editing existing message content/status fields
+- Permanent log deletion (out of scope—logs archive separately)
+- Bulk delete API endpoint (only clear-view supported)
+- Log retention policy automation (manual clear only)
+- Frontend log export feature (separate task)
 
 ---
 

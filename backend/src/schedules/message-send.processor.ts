@@ -45,6 +45,8 @@ export class MessageSendProcessor extends WorkerHost {
   private readonly retryBaseDelayMs: number;
   private readonly retryMaxDelayMs: number;
   private readonly dailyCapRetryDelayMs: number;
+  private readonly disconnectedRetryBaseMs: number;
+  private readonly disconnectedRetryMaxMs: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -79,6 +81,14 @@ export class MessageSendProcessor extends WorkerHost {
       process.env.DAILY_CAP_RETRY_DELAY_MS || "600000",
       10
     );
+    this.disconnectedRetryBaseMs = parseInt(
+      process.env.WHATSAPP_DISCONNECTED_RETRY_BASE_MS || "60000",
+      10
+    );
+    this.disconnectedRetryMaxMs = parseInt(
+      process.env.WHATSAPP_DISCONNECTED_RETRY_MAX_MS || "900000",
+      10
+    );
   }
 
   async process(job: Job<SendJobData>): Promise<void> {
@@ -90,6 +100,25 @@ export class MessageSendProcessor extends WorkerHost {
       select: { status: true }
     });
     if (!log || log.status === "sent") {
+      return;
+    }
+
+    // If tenant is in disconnect cooldown, skip send attempts for this cycle.
+    const cooldownMs = await this.getDisconnectCooldownMs(data.tenantId);
+    if (cooldownMs > 0) {
+      await this.reschedulePending(
+        data,
+        "whatsapp_not_connected_cooldown",
+        cooldownMs
+      );
+      return;
+    }
+
+    // Do not attempt send workflow unless tenant session is connected.
+    if (this.wa.getStatus(data.tenantId) !== "connected") {
+      const delayMs = this.computeDisconnectedRetryDelay(job.attemptsMade + 1);
+      await this.openDisconnectCooldown(data.tenantId, delayMs);
+      await this.reschedulePending(data, "whatsapp_not_connected", delayMs);
       return;
     }
 
@@ -232,6 +261,41 @@ export class MessageSendProcessor extends WorkerHost {
       this.retryMaxDelayMs
     );
     return Math.floor(exp * (0.9 + Math.random() * 0.2));
+  }
+
+  private computeDisconnectedRetryDelay(attemptNumber: number): number {
+    const exp = Math.min(
+      this.disconnectedRetryBaseMs *
+        Math.pow(2, Math.max(attemptNumber - 1, 0)),
+      this.disconnectedRetryMaxMs
+    );
+    return Math.floor(exp * (0.9 + Math.random() * 0.2));
+  }
+
+  private disconnectCooldownKey(tenantId: string): string {
+    return `wa:cooldown:tenant:${tenantId}:disconnected`;
+  }
+
+  private async getDisconnectCooldownMs(tenantId: string): Promise<number> {
+    try {
+      const ttl = await this.redis.pttl(this.disconnectCooldownKey(tenantId));
+      return ttl > 0 ? ttl : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  private async openDisconnectCooldown(tenantId: string, delayMs: number) {
+    try {
+      await this.redis.set(
+        this.disconnectCooldownKey(tenantId),
+        "1",
+        "PX",
+        Math.max(delayMs, 1000)
+      );
+    } catch {
+      /* ignore */
+    }
   }
 
   private async acquireLock(

@@ -1,7 +1,8 @@
-# Assessment: Add Clear Logs from View Action
+# Assessment: Clear Logs from View Feature
 
 **Created**: 2026-06-19  
-**Scope**: full-stack
+**Scope**: full-stack  
+**Status**: Ready for TDD Red Phase
 
 ---
 

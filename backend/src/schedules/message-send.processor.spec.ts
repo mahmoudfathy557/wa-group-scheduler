@@ -17,6 +17,7 @@ import { MessageSendProcessor } from "./message-send.processor";
 jest.mock("ioredis", () => {
   return jest.fn().mockImplementation(() => ({
     set: jest.fn().mockResolvedValue("OK"),
+    pttl: jest.fn().mockResolvedValue(-1),
     del: jest.fn().mockResolvedValue(1),
     eval: jest.fn().mockResolvedValue(1)
   }));
@@ -30,6 +31,7 @@ describe("MessageSendProcessor", () => {
     } as any;
 
     const wa = {
+      getStatus: jest.fn().mockReturnValue("connected"),
       sendText: jest.fn()
     } as any;
 
@@ -55,6 +57,76 @@ describe("MessageSendProcessor", () => {
     const acquired = await (processor as any).acquireLock("tenant-lock", 0);
 
     expect(acquired).toBeNull();
+  });
+
+  it("reschedules immediately when tenant session is disconnected", async () => {
+    const { processor, prisma, wa, sendQueue } = makeProcessor();
+
+    prisma.messageLog.findUnique.mockResolvedValue({ status: "pending" });
+    prisma.messageLog.update.mockResolvedValue({ status: "pending" });
+    wa.getStatus.mockReturnValue("disconnected");
+
+    const job = {
+      data: {
+        tenantId: "tenant-1",
+        scheduleId: "schedule-1",
+        runId: "run-1",
+        groupJid: "group-1@g.us",
+        messageText: "hello",
+        imageUrls: [],
+        logId: "log-1",
+        index: 0
+      },
+      attemptsMade: 0,
+      opts: { attempts: 3 }
+    } as any;
+
+    await processor.process(job);
+
+    expect(prisma.tenant.findUnique).not.toHaveBeenCalled();
+    expect(wa.sendText).not.toHaveBeenCalled();
+    expect(prisma.messageLog.update).toHaveBeenCalledWith({
+      where: { id: "log-1" },
+      data: { status: "pending", errorReason: "whatsapp_not_connected" }
+    });
+    expect(sendQueue.add).toHaveBeenCalled();
+  });
+
+  it("reschedules during active disconnected cooldown without checking WA status", async () => {
+    const { processor, prisma, wa, sendQueue } = makeProcessor();
+
+    prisma.messageLog.findUnique.mockResolvedValue({ status: "pending" });
+    prisma.messageLog.update.mockResolvedValue({ status: "pending" });
+    (processor as any).redis.pttl.mockResolvedValue(45_000);
+
+    const job = {
+      data: {
+        tenantId: "tenant-1",
+        scheduleId: "schedule-1",
+        runId: "run-1",
+        groupJid: "group-1@g.us",
+        messageText: "hello",
+        imageUrls: [],
+        logId: "log-1",
+        index: 0
+      },
+      attemptsMade: 0,
+      opts: { attempts: 3 }
+    } as any;
+
+    await processor.process(job);
+
+    expect(wa.getStatus).not.toHaveBeenCalled();
+    expect(prisma.tenant.findUnique).not.toHaveBeenCalled();
+    expect(wa.sendText).not.toHaveBeenCalled();
+    expect(prisma.messageLog.update).toHaveBeenCalledWith({
+      where: { id: "log-1" },
+      data: {
+        status: "pending",
+        errorReason: "whatsapp_not_connected_cooldown"
+      }
+    });
+    expect(sendQueue.add).toHaveBeenCalled();
   });
 
   it("requeues pending job on final attempt when tenant lock cannot be acquired", async () => {

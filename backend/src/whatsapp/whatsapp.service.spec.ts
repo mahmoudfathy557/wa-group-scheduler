@@ -17,18 +17,9 @@ describe("WhatsAppService - Disconnect Handler", () => {
 
     const authAdapter = {} as any;
     const gateway = {} as any;
-    const schedulesService = {
-      pauseAllActive: jest.fn().mockResolvedValue({ pausedCount: 2 })
-    } as any;
+    const service = new WhatsAppService(prisma, authAdapter, gateway);
 
-    const service = new WhatsAppService(
-      prisma,
-      authAdapter,
-      gateway,
-      schedulesService
-    );
-
-    // Should have schedulesService injected and available
+    // Service should instantiate without request-scoped dependencies.
     expect(service).toBeDefined();
   });
 
@@ -48,19 +39,7 @@ describe("WhatsAppService - Disconnect Handler", () => {
 
     const authAdapter = {} as any;
     const gateway = {} as any;
-    const schedulesService = {
-      pauseAllActive: jest
-        .fn()
-        .mockResolvedValueOnce({ pausedCount: 1 })
-        .mockResolvedValueOnce({ pausedCount: 0 })
-    } as any;
-
-    const service = new WhatsAppService(
-      prisma,
-      authAdapter,
-      gateway,
-      schedulesService
-    );
+    const service = new WhatsAppService(prisma, authAdapter, gateway);
 
     // Should handle repeated disconnect safely
     expect(service).toBeDefined();

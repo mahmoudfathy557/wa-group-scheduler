@@ -185,4 +185,69 @@ describe("ScheduleTriggerProcessor", () => {
     expect(sendQueue.addBulk).not.toHaveBeenCalled();
     expect(sendQueue.add).not.toHaveBeenCalled();
   });
+
+  it("successfully enqueues all 5 groups without truncation (multigroup bug validation)", async () => {
+    const groupCount = 5;
+    const links = Array.from({ length: groupCount }, (_, i) => ({
+      group: { groupJid: `group-${i + 1}@g.us` }
+    }));
+
+    const createdLogs = Array.from({ length: groupCount }, (_, i) => ({
+      id: `log-${i + 1}`
+    }));
+
+    const prisma = {
+      schedule: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: "schedule-1",
+          status: "active",
+          cronExpression: "0 */1 * * *",
+          timezone: "UTC",
+          messageText: "test message",
+          imageUrls: [],
+          groupLinks: links
+        }),
+        update: jest.fn().mockResolvedValue(undefined)
+      },
+      messageLog: {
+        create: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue(undefined)
+      },
+      $transaction: jest.fn().mockResolvedValue(createdLogs)
+    } as any;
+
+    const sendQueue = {
+      addBulk: jest.fn().mockResolvedValue(undefined),
+      add: jest.fn()
+    } as any;
+
+    const processor = new ScheduleTriggerProcessor(prisma, sendQueue);
+    const job = {
+      data: { scheduleId: "schedule-1", tenantId: "tenant-1" }
+    } as any;
+
+    await processor.process(job);
+
+    // Verify ALL 5 groups are in the bulk enqueue (not just first 3)
+    expect(sendQueue.addBulk).toHaveBeenCalledTimes(1);
+    const [bulkJobs] = sendQueue.addBulk.mock.calls[0];
+    expect(bulkJobs).toHaveLength(5); // Verify no truncation
+
+    // Verify each group is correctly mapped
+    bulkJobs.forEach((job, index) => {
+      expect(job).toEqual(
+        expect.objectContaining({
+          name: "send",
+          data: expect.objectContaining({
+            tenantId: "tenant-1",
+            scheduleId: "schedule-1",
+            groupJid: `group-${index + 1}@g.us`,
+            logId: `log-${index + 1}`,
+            index: index,
+            messageText: "test message"
+          })
+        })
+      );
+    });
+  });
 });

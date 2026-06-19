@@ -1,33 +1,322 @@
-# Task Checklist: Add Clear Logs from View Action
+# Task Checklist: Clear Logs from View Feature
 
-**Status**: ⏳ Ready to Start  
-**Total Tasks**: 18  
-**Completion Target**: clear action hides old logs from page without deleting DB rows
-
----
-
-## Legend
-
-- ⏳ Not Started
-- 🔄 In Progress
-- ✅ Complete
-- ⚠️ Blocked
-- 📌 TDD Red
-- 📗 TDD Green
-- 🔧 TDD Refactor
+**Status**: ✅ Ready to Execute  
+**Total Tasks**: 20  
+**Completion Target**: All tasks → ✅ Complete
 
 ---
 
 ## Phase 1: Red – Write Failing Tests
 
-### 1.1 Add failing service tests for clear marker
+### 1.1 Write LogsService Tests (Red)
 
 **Status**: ⏳  
 **File**: `backend/src/logs/logs.service.spec.ts`  
 **TDD Step**: 📌 Red
 
-- [ ] Add test: list hides logs created at/before marker
-- [ ] Add test: clear method upserts marker
+**Checklist**:
+
+- [ ] Add test: `clearView()` creates LogViewState entry
+- [ ] Add test: `list()` filters where createdAt > LogViewState.clearedAt
+- [ ] Add test: Multiple clears are idempotent
+- [ ] Run `npm test -- logs.service.spec.ts` → expect FAIL
+- [ ] Commit: "Test(red): Add clear-view service tests"
+
+---
+
+### 1.2 Write LogsController Tests (Red)
+
+**Status**: ⏳  
+**File**: `backend/src/logs/logs.controller.spec.ts`  
+**TDD Step**: 📌 Red
+
+**Checklist**:
+
+- [ ] Add test: `POST /logs/clear-view` calls service
+- [ ] Add test: Response includes `{ clearedAt, message }`
+- [ ] Add test: GET returns empty if all logs pre-clear
+- [ ] Run `npm test -- logs.controller.spec.ts` → expect FAIL
+- [ ] Commit: "Test(red): Add clear-view controller tests"
+
+---
+
+### 1.3 Write Frontend Component Tests (Red)
+
+**Status**: ⏳  
+**File**: `frontend/src/pages/Logs.spec.tsx`  
+**TDD Step**: 📌 Red
+
+**Checklist**:
+
+- [ ] Add test: Clear button renders
+- [ ] Add test: Dialog shows on button click
+- [ ] Add test: Calls POST /logs/clear-view on confirm
+- [ ] Add test: Refetches logs after clear
+- [ ] Run `npm test -- Logs.spec.tsx` → expect FAIL
+- [ ] Commit: "Test(red): Add clear logs frontend tests"
+
+---
+
+### 1.4 Write Integration Test (Red)
+
+**Status**: ⏳  
+**File**: `backend/tests/integration/logs-clear-view.e2e.spec.ts`  
+**TDD Step**: 📌 Red
+
+**Checklist**:
+
+- [ ] Create integration test file
+- [ ] Add test: Full flow (create logs → clear → filter works)
+- [ ] Add test: Multi-tenant isolation (Tenant A ≠ B)
+- [ ] Run test → expect FAIL
+- [ ] Commit: "Test(red): Add integration test for clear-view"
+
+---
+
+**Phase 1 Exit Criteria**: ✅ All tests failing (red)
+
+---
+
+## Phase 2: Green – Implement Minimal Code
+
+### 2.1 Add LogViewState to Schema
+
+**Status**: ⏳  
+**File**: `backend/prisma/schema.prisma`  
+**TDD Step**: 📗 Green
+
+**Checklist**:
+
+- [ ] Add model:
+  ```prisma
+  model LogViewState {
+    id        String   @id @default(cuid())
+    tenantId  String   @unique
+    clearedAt DateTime @default(now())
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+  ```
+- [ ] Run `npx prisma migrate dev --name add_log_view_state`
+- [ ] Verify migration created
+- [ ] Commit: "Db: Add LogViewState model"
+
+---
+
+### 2.2 Implement LogsService.clearView()
+
+**Status**: ⏳  
+**File**: `backend/src/logs/logs.service.ts`  
+**TDD Step**: 📗 Green
+
+**Checklist**:
+
+- [ ] Add method: `async clearView(tenantId: string)`
+- [ ] Use `upsert` to create/update LogViewState
+- [ ] Return `{ clearedAt: new Date(), message: 'Logs cleared' }`
+- [ ] Run `npm test -- logs.service.spec.ts` → expect PASS
+- [ ] Commit: "Feat: Implement clearView method"
+
+---
+
+### 2.3 Update LogsService.list() Filter
+
+**Status**: ⏳  
+**File**: `backend/src/logs/logs.service.ts`  
+**TDD Step**: 📗 Green
+
+**Checklist**:
+
+- [ ] Modify `list()` to check LogViewState
+- [ ] Add filter: `where: { tenantId, createdAt: { gt: logViewState?.clearedAt } }`
+- [ ] Run `npm test -- logs.service.spec.ts` → expect PASS
+- [ ] Commit: "Feat: Filter logs by clear marker"
+
+---
+
+### 2.4 Implement LogsController.clearView()
+
+**Status**: ⏳  
+**File**: `backend/src/logs/logs.controller.ts`  
+**TDD Step**: 📗 Green
+
+**Checklist**:
+
+- [ ] Add `@Post('clear-view')` endpoint
+- [ ] Inject LogsService
+- [ ] Call `logsService.clearView(currentUser.tenantId)`
+- [ ] Return response
+- [ ] Run `npm test -- logs.controller.spec.ts` → expect PASS
+- [ ] Commit: "Feat: Add POST /logs/clear-view endpoint"
+
+---
+
+### 2.5 Implement Frontend Clear Button
+
+**Status**: ⏳  
+**File**: `frontend/src/pages/Logs.tsx`  
+**TDD Step**: 📗 Green
+
+**Checklist**:
+
+- [ ] Add button: "Clear Logs"
+- [ ] Add confirmation dialog (create separate component)
+- [ ] On confirm: call `POST /logs/clear-view`
+- [ ] Refetch logs list
+- [ ] Run `npm test -- Logs.spec.tsx` → expect PASS
+- [ ] Commit: "Feat: Add clear logs button"
+
+---
+
+### 2.6 Run Full Test Suite
+
+**Status**: ⏳
+
+**Checklist**:
+
+- [ ] Run `npm test` (backend) → all PASS
+- [ ] Run `npm test` (frontend) → all PASS
+- [ ] Commit: "Test: All Phase 2 tests passing"
+
+---
+
+**Phase 2 Exit Criteria**: ✅ All tests passing
+
+---
+
+## Phase 3: Refactor – Improve Code Quality
+
+### 3.1 Service Refactor
+
+**Status**: ⏳  
+**File**: `backend/src/logs/logs.service.ts`
+
+**Checklist**:
+
+- [ ] Extract filter logic to helper: `buildLogsFilter(tenantId)`
+- [ ] Add logging: `this.logger.debug('Clearing logs...')`
+- [ ] Add error handling: `try-catch` with custom exception
+- [ ] Add JSDoc comments
+- [ ] Run tests → expect PASS
+- [ ] Commit: "Refactor: Improve service clarity"
+
+---
+
+### 3.2 Controller Refactor
+
+**Status**: ⏳  
+**File**: `backend/src/logs/logs.controller.ts`
+
+**Checklist**:
+
+- [ ] Add OpenAPI decorators: `@ApiOperation()`, `@ApiResponse()`
+- [ ] Create DTO: `ClearViewResponseDto`
+- [ ] Validate tenant context
+- [ ] Run tests → expect PASS
+- [ ] Commit: "Refactor: Add OpenAPI documentation"
+
+---
+
+### 3.3 Frontend Component Refactor
+
+**Status**: ⏳  
+**File**: `frontend/src/pages/Logs.tsx` + `ClearLogsDialog.tsx`
+
+**Checklist**:
+
+- [ ] Extract dialog to separate component
+- [ ] Add error toast on failure
+- [ ] Add loading state
+- [ ] Memoize handlers
+- [ ] Add accessibility labels
+- [ ] Run tests → expect PASS
+- [ ] Commit: "Refactor: Improve component UX"
+
+---
+
+### 3.4 Security Audit
+
+**Status**: ⏳
+
+**Checklist**:
+
+- [ ] Verify tenant scoping (LogViewState.tenantId)
+- [ ] Verify `@CurrentUser()` guard on endpoint
+- [ ] Verify no hardcoded secrets
+- [ ] Verify error messages safe
+- [ ] Run all tests → expect PASS
+- [ ] Commit: "Security: Audit clear-view feature"
+
+---
+
+## Phase 4: Integration Tests
+
+### 4.1 Run E2E Test
+
+**Status**: ⏳  
+**File**: `backend/tests/integration/logs-clear-view.e2e.spec.ts`
+
+**Checklist**:
+
+- [ ] Run test → expect PASS
+- [ ] Verify logs filtered correctly
+- [ ] Verify old logs preserved in DB
+- [ ] Commit: "Test(integration): E2E flow validated"
+
+---
+
+### 4.2 Multi-Tenant Test
+
+**Status**: ⏳
+
+**Checklist**:
+
+- [ ] Verify Tenant A clear ≠ Tenant B logs
+- [ ] Verify no cross-tenant data leakage
+- [ ] Run test → expect PASS
+- [ ] Commit: "Test(security): Multi-tenant isolation verified"
+
+---
+
+## Phase 5: Documentation
+
+### 5.1 Update Docs
+
+**Status**: ⏳
+
+**Checklist**:
+
+- [ ] Update README: add POST /logs/clear-view endpoint
+- [ ] Add code comments/JSDoc
+- [ ] Commit: "Docs: Update documentation"
+
+---
+
+### 5.2 Final Self-Review
+
+**Status**: ⏳
+
+**Checklist**:
+
+- [ ] All tests passing
+- [ ] No console errors
+- [ ] Code follows patterns
+- [ ] Multi-tenant verified
+- [ ] Ready for merge
+
+---
+
+## Summary
+
+| Phase          | Tasks   | Status | Duration |
+| -------------- | ------- | ------ | -------- |
+| 1: Red         | 1.1–1.4 | ⏳     | 1h       |
+| 2: Green       | 2.1–2.6 | ⏳     | 1.5h     |
+| 3: Refactor    | 3.1–3.4 | ⏳     | 1h       |
+| 4: Integration | 4.1–4.2 | ⏳     | 45m      |
+| 5: Docs        | 5.1–5.2 | ⏳     | 15m      |
+| **Total**      | **20**  | **⏳** | **~4h**  |
+
 - [ ] Add test: clear does not modify existing `MessageLog` fields
 - [ ] Run backend logs spec and verify fail
 

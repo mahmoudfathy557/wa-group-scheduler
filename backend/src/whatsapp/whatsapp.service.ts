@@ -3,8 +3,6 @@ import {
   Logger,
   OnModuleInit,
   OnModuleDestroy,
-  Inject,
-  forwardRef,
   ServiceUnavailableException
 } from "@nestjs/common";
 import makeWASocket, {
@@ -18,7 +16,6 @@ import * as QRCode from "qrcode";
 import { PrismaService } from "../prisma/prisma.service";
 import { BaileysAuthAdapter } from "./baileys-auth.adapter";
 import { WhatsAppGateway } from "../socket/whatsapp.gateway";
-import { SchedulesService } from "../schedules/schedules.service";
 
 interface TenantSocketEntry {
   sock: WASocket;
@@ -36,10 +33,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authAdapter: BaileysAuthAdapter,
-    @Inject(forwardRef(() => WhatsAppGateway))
-    private readonly gateway: WhatsAppGateway,
-    @Inject(forwardRef(() => SchedulesService))
-    private readonly schedulesService: SchedulesService
+    private readonly gateway: WhatsAppGateway
   ) {}
 
   async onModuleInit() {
@@ -137,23 +131,32 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       } else if (connection === "close") {
         const code = (lastDisconnect?.error as any)?.output?.statusCode;
         const isLoggedOut = code === DisconnectReason.loggedOut;
+        const isConnectionReplaced =
+          code === DisconnectReason.connectionReplaced;
         entry.status = "disconnected";
         await this.updateStatus(tenantId, "disconnected");
         this.gateway.emitToTenant(tenantId, "whatsapp:status", {
           status: "disconnected",
-          reason: isLoggedOut ? "logged_out" : "connection_lost"
+          reason: isLoggedOut
+            ? "logged_out"
+            : isConnectionReplaced
+              ? "connection_replaced"
+              : "connection_lost"
         });
 
         // Auto-pause all active schedules for this tenant when disconnect happens.
-        // This prevents stale trigger attempts while connection is down.
+        // Keep it local here to avoid depending on request-scoped tenant services.
         try {
-          const pauseResult = await this.schedulesService.pauseAllActive();
-          if (pauseResult.pausedCount > 0) {
+          const pauseResult = await this.prisma.schedule.updateMany({
+            where: { tenantId, status: "active" },
+            data: { status: "paused", repeatJobKey: null }
+          });
+          if (pauseResult.count > 0) {
             this.logger.log(
-              `Tenant ${tenantId} disconnected: auto-paused ${pauseResult.pausedCount} active schedules`
+              `Tenant ${tenantId} disconnected: auto-paused ${pauseResult.count} active schedules`
             );
           }
-        } catch (pauseErr) {
+        } catch (pauseErr: any) {
           this.logger.warn(
             `Failed to auto-pause schedules for tenant ${tenantId}: ${pauseErr?.message}`
           );
@@ -162,6 +165,15 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
         if (isLoggedOut) {
           this.logger.warn(`Tenant ${tenantId} logged out — wiping creds`);
           await this.authAdapter.wipe(tenantId);
+          this.sockets.delete(tenantId);
+          return;
+        }
+
+        if (isConnectionReplaced) {
+          this.logger.warn(
+            `Tenant ${tenantId} connection replaced (code=${code}); stopping auto-reconnect to avoid conflict loop`
+          );
+          this.latestQrs.delete(tenantId);
           this.sockets.delete(tenantId);
           return;
         }
