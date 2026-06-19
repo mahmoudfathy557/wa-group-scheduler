@@ -12,8 +12,19 @@ interface Log {
   createdAt: string;
 }
 
+interface Group {
+  id: string;
+  groupJid: string;
+  name: string;
+}
+
 export function Logs() {
   const [status, setStatus] = useState<string>("");
+
+  const { data: groups } = useQuery({
+    queryKey: ["groups"],
+    queryFn: async () => (await api.get<Group[]>("/groups")).data
+  });
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["logs", status],
@@ -22,6 +33,10 @@ export function Logs() {
         .data,
     refetchInterval: 10000
   });
+
+  const groupNameByJid = Object.fromEntries(
+    (groups ?? []).map((group) => [group.groupJid, group.name])
+  );
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -85,11 +100,11 @@ export function Logs() {
                         {new Date(l.createdAt).toLocaleString()}
                       </p>
                       <div className="sm:hidden text-xs text-gray-500 mt-1 break-all">
-                        {l.groupJid}
+                        {groupNameByJid[l.groupJid] || l.groupJid}
                       </div>
                     </td>
                     <td className="px-4 sm:px-0 py-3 font-mono text-xs text-gray-600 hidden sm:table-cell break-all max-w-xs">
-                      {l.groupJid}
+                      {groupNameByJid[l.groupJid] || l.groupJid}
                     </td>
                     <td className="px-4 sm:px-0 py-3">
                       <span
