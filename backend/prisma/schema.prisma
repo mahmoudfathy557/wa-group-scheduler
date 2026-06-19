@@ -24,6 +24,7 @@ model Tenant {
   groups   Group[]
   schedules Schedule[]
   logs     MessageLog[]
+  logViewState LogViewState?
 }
 
 model User {
@@ -128,4 +129,12 @@ model MessageLog {
   @@index([scheduleId, runId])
   @@unique([tenantId, runId, groupJid])
   @@index([status, createdAt])
+}
+
+model LogViewState {
+  id            String   @id @default(cuid())
+  tenantId      String   @unique
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  logsClearedAt DateTime?
+  updatedAt     DateTime @updatedAt
 }

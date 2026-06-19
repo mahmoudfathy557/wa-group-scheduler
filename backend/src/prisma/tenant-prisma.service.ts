@@ -9,7 +9,8 @@ const TENANT_MODELS = new Set([
   "WhatsAppAuthKey",
   "Group",
   "Schedule",
-  "MessageLog"
+  "MessageLog",
+  "LogViewState"
 ]);
 
 const READ_OPS = new Set([

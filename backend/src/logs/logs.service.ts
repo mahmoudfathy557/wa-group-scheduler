@@ -5,21 +5,46 @@ import { TenantPrismaService } from "../prisma/tenant-prisma.service";
 export class LogsService {
   constructor(private readonly tprisma: TenantPrismaService) {}
 
-  list(query: {
+  async list(query: {
     scheduleId?: string;
     status?: string;
     take?: number;
     skip?: number;
   }) {
+    const client: any = this.tprisma.client;
+    const viewState = await client.logViewState.findFirst();
+
     const where: any = {};
     if (query.scheduleId) where.scheduleId = query.scheduleId;
     if (query.status) where.status = query.status;
-    return (this.tprisma.client as any).messageLog.findMany({
+    if (viewState?.logsClearedAt) {
+      where.createdAt = { gt: viewState.logsClearedAt };
+    }
+
+    return client.messageLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
       take: Math.min(query.take ?? 50, 200),
       skip: query.skip ?? 0
     });
+  }
+
+  async clearView() {
+    const client: any = this.tprisma.client;
+    const logsClearedAt = new Date();
+
+    const updated = await client.logViewState.updateMany({
+      where: {},
+      data: { logsClearedAt }
+    });
+
+    if (updated.count === 0) {
+      await client.logViewState.create({
+        data: { logsClearedAt }
+      });
+    }
+
+    return { logsClearedAt };
   }
 
   async stats() {

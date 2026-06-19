@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 
 interface Log {
@@ -20,6 +20,7 @@ interface Group {
 
 export function Logs() {
   const [status, setStatus] = useState<string>("");
+  const [clearError, setClearError] = useState<string>("");
 
   const { data: groups } = useQuery({
     queryKey: ["groups"],
@@ -32,6 +33,19 @@ export function Logs() {
       (await api.get<Log[]>("/logs", { params: status ? { status } : {} }))
         .data,
     refetchInterval: 10000
+  });
+
+  const clearLogsMutation = useMutation({
+    mutationFn: async () => {
+      await api.post("/logs/clear-view");
+    },
+    onSuccess: async () => {
+      setClearError("");
+      await refetch();
+    },
+    onError: () => {
+      setClearError("Could not clear logs right now. Please try again.");
+    }
   });
 
   const groupNameByJid = Object.fromEntries(
@@ -62,8 +76,18 @@ export function Logs() {
             >
               ↻ Refresh
             </button>
+            <button
+              onClick={() => clearLogsMutation.mutate()}
+              disabled={clearLogsMutation.isPending}
+              className="border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg px-4 py-2 text-sm font-medium text-amber-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {clearLogsMutation.isPending ? "Clearing..." : "Clear from view"}
+            </button>
           </div>
         </div>
+        {clearError ? (
+          <p className="text-sm text-red-600 mt-3">{clearError}</p>
+        ) : null}
       </div>
 
       <div className="p-4 sm:p-6">

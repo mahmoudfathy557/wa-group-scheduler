@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from "@nestjs/common";
+import { Controller, Get, Post, Query } from "@nestjs/common";
 import { LogsService } from "./logs.service";
 
 @Controller("logs")
@@ -23,5 +23,10 @@ export class LogsController {
   @Get("stats")
   stats() {
     return this.svc.stats();
+  }
+
+  @Post("clear-view")
+  clearView() {
+    return this.svc.clearView();
   }
 }
