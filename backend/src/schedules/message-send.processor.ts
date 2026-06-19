@@ -237,7 +237,7 @@ export class MessageSendProcessor extends WorkerHost {
 
     await this.sendQueue.add("send", data, {
       // Unique retry job id prevents collision with active/completed job ids.
-      jobId: `${data.logId}:retry:${Date.now()}:${Math.floor(Math.random() * 1000)}`,
+      jobId: `${data.logId}-retry-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       delay: Math.max(delayMs, 1000),
       attempts: RETRY_ATTEMPTS,
       backoff: { type: "exponential", delay: RETRY_BACKOFF_MS },

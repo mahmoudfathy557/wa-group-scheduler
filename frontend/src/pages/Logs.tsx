@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 
 interface Log {
@@ -9,6 +10,7 @@ interface Log {
   status: "pending" | "sent" | "failed";
   errorReason: string | null;
   whatsappMessageId: string | null;
+  nextRetryAt: string | null;
   createdAt: string;
 }
 
@@ -20,7 +22,6 @@ interface Group {
 
 export function Logs() {
   const [status, setStatus] = useState<string>("");
-  const [clearError, setClearError] = useState<string>("");
 
   const { data: groups } = useQuery({
     queryKey: ["groups"],
@@ -33,19 +34,6 @@ export function Logs() {
       (await api.get<Log[]>("/logs", { params: status ? { status } : {} }))
         .data,
     refetchInterval: 10000
-  });
-
-  const clearLogsMutation = useMutation({
-    mutationFn: async () => {
-      await api.post("/logs/clear-view");
-    },
-    onSuccess: async () => {
-      setClearError("");
-      await refetch();
-    },
-    onError: () => {
-      setClearError("Could not clear logs right now. Please try again.");
-    }
   });
 
   const groupNameByJid = Object.fromEntries(
@@ -76,18 +64,8 @@ export function Logs() {
             >
               ↻ Refresh
             </button>
-            <button
-              onClick={() => clearLogsMutation.mutate()}
-              disabled={clearLogsMutation.isPending}
-              className="border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg px-4 py-2 text-sm font-medium text-amber-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {clearLogsMutation.isPending ? "Clearing..." : "Clear from view"}
-            </button>
           </div>
         </div>
-        {clearError ? (
-          <p className="text-sm text-red-600 mt-3">{clearError}</p>
-        ) : null}
       </div>
 
       <div className="p-4 sm:p-6">
@@ -110,6 +88,9 @@ export function Logs() {
                   </th>
                   <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700">
                     Status
+                  </th>
+                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden lg:table-cell">
+                    Next retry
                   </th>
                   <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden md:table-cell">
                     Details
@@ -142,6 +123,21 @@ export function Logs() {
                       >
                         {l.status}
                       </span>
+                      {l.status !== "sent" ? (
+                        <div className="lg:hidden text-xs text-gray-500 mt-1">
+                          Next:{" "}
+                          {l.nextRetryAt
+                            ? new Date(l.nextRetryAt).toLocaleString()
+                            : "Unknown"}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="px-4 sm:px-0 py-3 text-xs text-gray-600 hidden lg:table-cell">
+                      {l.status === "sent"
+                        ? "—"
+                        : l.nextRetryAt
+                          ? new Date(l.nextRetryAt).toLocaleString()
+                          : "Unknown"}
                     </td>
                     <td className="px-4 sm:px-0 py-3 text-xs text-gray-600 hidden md:table-cell break-all">
                       {l.errorReason || l.whatsappMessageId || "—"}
@@ -152,6 +148,15 @@ export function Logs() {
             </table>
           </div>
         )}
+      </div>
+
+      <div className="px-4 sm:px-6 pb-4 sm:pb-6">
+        <Link
+          to="/retry-center"
+          className="inline-flex items-center rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+        >
+          Open retry center
+        </Link>
       </div>
 
       <div className="p-4 sm:p-6 bg-gray-50 border-t text-xs text-gray-500">

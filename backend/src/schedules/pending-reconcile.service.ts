@@ -18,6 +18,8 @@ interface SendJobData {
 
 const REQUEUE_ATTEMPTS = 3;
 const REQUEUE_BACKOFF_MS = 5000;
+const REQUEUE_MIN_DELAY_MS = 1000;
+const REQUEUE_MAX_DELAY_MS = 60000;
 
 @Injectable()
 export class PendingReconcileService {
@@ -64,6 +66,12 @@ export class PendingReconcileService {
     let queued = 0;
     for (const log of stalePending) {
       try {
+        const delayMs =
+          REQUEUE_MIN_DELAY_MS +
+          Math.floor(
+            Math.random() * (REQUEUE_MAX_DELAY_MS - REQUEUE_MIN_DELAY_MS + 1)
+          );
+
         await this.sendQueue.add(
           "send",
           {
@@ -78,7 +86,8 @@ export class PendingReconcileService {
           },
           {
             // Mark the log so the next cron pass does not enqueue it again.
-            jobId: `${log.id}:reconcile:${Date.now()}:${Math.floor(Math.random() * 1000)}`,
+            jobId: `${log.id}-reconcile-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            delay: delayMs,
             attempts: REQUEUE_ATTEMPTS,
             backoff: { type: "exponential", delay: REQUEUE_BACKOFF_MS },
             removeOnComplete: true,
@@ -90,8 +99,12 @@ export class PendingReconcileService {
           data: { errorReason: "stale_pending_requeued" }
         });
         queued++;
-      } catch {
-        // Best effort; leave pending for next reconcile cycle.
+      } catch (err) {
+        // Log the error so we can debug requeue failures
+        this.logger.error(
+          `Failed to requeue stale pending log ${log.id}: ${err instanceof Error ? err.message : String(err)}`,
+          err instanceof Error ? err.stack : undefined
+        );
       }
     }
 

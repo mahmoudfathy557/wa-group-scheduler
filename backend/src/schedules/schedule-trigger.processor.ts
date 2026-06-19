@@ -131,8 +131,12 @@ export class ScheduleTriggerProcessor extends WorkerHost {
       for (const jobDef of jobs) {
         try {
           await this.sendQueue.add(jobDef.name, jobDef.data, jobDef.opts);
-        } catch {
+        } catch (jobErr: any) {
           failedToQueue++;
+          this.logger.error(
+            `Trigger ${scheduleId}: fallback enqueue failed for logId=${jobDef.data.logId} groupJid=${jobDef.data.groupJid}: ${jobErr?.message}`,
+            jobErr?.stack
+          );
         }
       }
 

@@ -14,6 +14,7 @@ import { Groups } from "./pages/Groups";
 import { SchedulesList } from "./pages/SchedulesList";
 import { ScheduleForm } from "./pages/ScheduleForm";
 import { Logs } from "./pages/Logs";
+import { RetryCenter } from "./pages/RetryCenter";
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -42,6 +43,9 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
             </NavLink>
             <NavLink to="/schedules" className={link}>
               Schedules
+            </NavLink>
+            <NavLink to="/retry-center" className={link}>
+              Retry center
             </NavLink>
             <NavLink to="/logs" className={link}>
               Logs
@@ -103,6 +107,13 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
               onClick={() => setMobileNavOpen(false)}
             >
               Schedules
+            </NavLink>
+            <NavLink
+              to="/retry-center"
+              className={({ isActive }) => link({ isActive })}
+              onClick={() => setMobileNavOpen(false)}
+            >
+              Retry center
             </NavLink>
             <NavLink
               to="/logs"
@@ -167,6 +178,14 @@ export default function App() {
         }
       />
       <Route
+        path="/retry-center"
+        element={
+          <ProtectedLayout>
+            <RetryCenter />
+          </ProtectedLayout>
+        }
+      />
+      <Route
         path="/logs"
         element={
           <ProtectedLayout>
@@ -174,6 +193,7 @@ export default function App() {
           </ProtectedLayout>
         }
       />
+
       <Route path="*" element={<Navigate to="/connect" replace />} />
     </Routes>
   );

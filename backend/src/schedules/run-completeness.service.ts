@@ -96,7 +96,26 @@ export class RunCompletenessService {
       });
 
       const existingSet = new Set(existingLogs.map((l) => l.groupJid));
-      const missing = expectedGroupJids.filter((jid) => !existingSet.has(jid));
+      // Start from groups missing for this runId
+      let missing = expectedGroupJids.filter((jid) => !existingSet.has(jid));
+
+      // Defensive: if a message for this schedule+group was already sent
+      // (possibly under a different runId), skip repair to avoid duplicate sends.
+      if (missing.length > 0) {
+        const alreadySent = await this.prisma.messageLog.findMany({
+          where: {
+            tenantId: run.tenantId,
+            scheduleId: run.scheduleId,
+            groupJid: { in: missing },
+            status: "sent"
+          },
+          select: { groupJid: true }
+        });
+        if (alreadySent.length > 0) {
+          const sentSet = new Set(alreadySent.map((s) => s.groupJid));
+          missing = missing.filter((jid) => !sentSet.has(jid));
+        }
+      }
 
       if (missing.length === 0) {
         continue;
@@ -104,8 +123,74 @@ export class RunCompletenessService {
 
       repairedRuns++;
 
+      const pendingRequeueAfterMs = parseInt(
+        process.env.PENDING_REQUEUE_AFTER_MS || "120000",
+        10
+      );
+
       for (const [index, groupJid] of missing.entries()) {
         try {
+          // Determine the group's original fan-out index from the schedule
+          // ordering so jittering remains stable and predictable.
+          const groupIndex = schedule.groupLinks.findIndex(
+            (l) => l.group.groupJid === groupJid
+          );
+          const jobIndex =
+            groupIndex >= 0 ? groupIndex : existingLogs.length + index;
+
+          // If there's an existing pending log for this schedule+group, prefer to
+          // reuse/requeue it instead of creating a new log to avoid duplicates.
+          const existingPending = await this.prisma.messageLog.findFirst({
+            where: {
+              tenantId: run.tenantId,
+              scheduleId: run.scheduleId,
+              groupJid,
+              status: "pending"
+            },
+            select: { id: true, createdAt: true, runId: true },
+            orderBy: { createdAt: "asc" }
+          });
+
+          if (existingPending) {
+            const age = Date.now() - existingPending.createdAt.getTime();
+            if (age >= pendingRequeueAfterMs) {
+              // Requeue the existing pending log and mark it so it won't be
+              // re-repaired repeatedly.
+              await this.sendQueue.add(
+                "send",
+                {
+                  tenantId: run.tenantId,
+                  scheduleId: run.scheduleId,
+                  runId: existingPending.runId,
+                  groupJid,
+                  messageText: schedule.messageText,
+                  imageUrls: schedule.imageUrls,
+                  logId: existingPending.id,
+                  index: jobIndex
+                },
+                {
+                  jobId: existingPending.id,
+                  attempts: REPAIR_ATTEMPTS,
+                  backoff: { type: "exponential", delay: REPAIR_BACKOFF_MS },
+                  removeOnComplete: true,
+                  removeOnFail: true
+                }
+              );
+
+              await this.prisma.messageLog.update({
+                where: { id: existingPending.id },
+                data: { errorReason: "stale_pending_requeued" }
+              });
+
+              repairedLogs++;
+              continue;
+            }
+
+            // Recent pending exists — skip repairing this group for now.
+            continue;
+          }
+
+          // No pending found: create a new pending log and enqueue send job.
           const created = await this.prisma.messageLog.create({
             data: {
               tenantId: run.tenantId,
@@ -128,7 +213,7 @@ export class RunCompletenessService {
               messageText: schedule.messageText,
               imageUrls: schedule.imageUrls,
               logId: created.id,
-              index: existingLogs.length + index
+              index: jobIndex
             },
             {
               jobId: created.id,
@@ -140,8 +225,11 @@ export class RunCompletenessService {
           );
 
           repairedLogs++;
-        } catch {
-          // If another path repaired first, skip silently and continue.
+        } catch (repairErr: any) {
+          // Likely a duplicate key race with another repair path; log at debug level.
+          this.logger.debug(
+            `Run completeness: skipped repair for groupJid=${groupJid} runId=${run.runId}: ${repairErr?.message}`
+          );
         }
       }
     }

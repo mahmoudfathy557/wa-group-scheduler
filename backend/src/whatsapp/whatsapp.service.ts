@@ -144,24 +144,6 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
               : "connection_lost"
         });
 
-        // Auto-pause all active schedules for this tenant when disconnect happens.
-        // Keep it local here to avoid depending on request-scoped tenant services.
-        try {
-          const pauseResult = await this.prisma.schedule.updateMany({
-            where: { tenantId, status: "active" },
-            data: { status: "paused", repeatJobKey: null }
-          });
-          if (pauseResult.count > 0) {
-            this.logger.log(
-              `Tenant ${tenantId} disconnected: auto-paused ${pauseResult.count} active schedules`
-            );
-          }
-        } catch (pauseErr: any) {
-          this.logger.warn(
-            `Failed to auto-pause schedules for tenant ${tenantId}: ${pauseErr?.message}`
-          );
-        }
-
         if (isLoggedOut) {
           this.logger.warn(`Tenant ${tenantId} logged out — wiping creds`);
           await this.authAdapter.wipe(tenantId);
@@ -180,12 +162,31 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
 
         if (this.destroyed) return;
         const attempts = ++entry.reconnectAttempts;
+        const maxAttempts = parseInt(
+          process.env.WA_MAX_RECONNECT_ATTEMPTS || "10",
+          10
+        );
+
+        if (attempts >= maxAttempts) {
+          this.logger.warn(
+            `Tenant ${tenantId} exceeded max reconnect attempts (${maxAttempts}); assuming session dead — wiping creds`
+          );
+          await this.authAdapter.wipe(tenantId);
+          this.sockets.delete(tenantId);
+          this.latestQrs.delete(tenantId);
+          this.gateway.emitToTenant(tenantId, "whatsapp:status", {
+            status: "disconnected",
+            reason: "session_expired"
+          });
+          return;
+        }
+
         const delay = Math.min(
           60_000,
           1000 * Math.pow(2, Math.min(attempts, 6))
         );
         this.logger.warn(
-          `Tenant ${tenantId} disconnected (code=${code}); retrying in ${delay}ms (attempt ${attempts})`
+          `Tenant ${tenantId} disconnected (code=${code}); retrying in ${delay}ms (attempt ${attempts}/${maxAttempts})`
         );
         setTimeout(() => {
           this.sockets.delete(tenantId);
