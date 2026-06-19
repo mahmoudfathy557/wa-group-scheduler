@@ -24,6 +24,9 @@ interface SendJobData {
   index: number;
 }
 
+const SEND_ATTEMPTS = 3;
+const SEND_BACKOFF_MS = 5000;
+
 function nextRunFromAnchor(
   anchorAt: Date,
   intervalMinutes: number,
@@ -97,27 +100,55 @@ export class ScheduleTriggerProcessor extends WorkerHost {
       )
     );
 
-    for (let i = 0; i < links.length; i++) {
-      const log = created[i];
-      const groupJid = links[i].group.groupJid;
-      await this.sendQueue.add(
-        "send",
-        {
-          tenantId,
-          scheduleId,
-          runId,
-          groupJid,
-          messageText: schedule.messageText,
-          imageUrls: schedule.imageUrls,
-          logId: log.id,
-          index: i
-        },
-        {
-          attempts: 3,
-          backoff: { type: "exponential", delay: 5000 },
-          removeOnComplete: { count: 100 },
-          removeOnFail: { count: 100 }
+    const jobs = links.map((link, i) => ({
+      name: "send",
+      data: {
+        tenantId,
+        scheduleId,
+        runId,
+        groupJid: link.group.groupJid,
+        messageText: schedule.messageText,
+        imageUrls: schedule.imageUrls,
+        logId: created[i].id,
+        index: i
+      },
+      opts: {
+        // Make each message log id the dedupe key for first dispatch.
+        jobId: created[i].id,
+        attempts: SEND_ATTEMPTS,
+        backoff: { type: "exponential", delay: SEND_BACKOFF_MS },
+        // Message history is stored in DB; free queue slots for future retries.
+        removeOnComplete: true,
+        removeOnFail: true
+      }
+    }));
+
+    try {
+      await this.sendQueue.addBulk(jobs);
+    } catch (error: any) {
+      // Best-effort fallback: enqueue each item individually.
+      let failedToQueue = 0;
+      for (const jobDef of jobs) {
+        try {
+          await this.sendQueue.add(jobDef.name, jobDef.data, jobDef.opts);
+        } catch {
+          failedToQueue++;
         }
+      }
+
+      if (failedToQueue > 0) {
+        await this.prisma.messageLog.updateMany({
+          where: {
+            id: { in: created.map((c) => c.id) },
+            status: "pending"
+          },
+          data: { errorReason: "enqueue_pending_retry" }
+        });
+      }
+
+      this.logger.error(
+        `Trigger ${scheduleId}: addBulk enqueue failed; fallback failed for ${failedToQueue}/${jobs.length}`,
+        error?.stack || error?.message || String(error)
       );
     }
 

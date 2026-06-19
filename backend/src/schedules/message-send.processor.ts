@@ -1,7 +1,8 @@
-import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { Processor, WorkerHost, InjectQueue } from "@nestjs/bullmq";
 import { Logger } from "@nestjs/common";
-import { Job } from "bullmq";
+import { Job, Queue } from "bullmq";
 import Redis from "ioredis";
+import { randomUUID } from "crypto";
 import { startOfDay } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { PrismaService } from "../prisma/prisma.service";
@@ -21,6 +22,8 @@ interface SendJobData {
 }
 
 const LOCK_TTL_MS = 30_000;
+const RETRY_ATTEMPTS = 3;
+const RETRY_BACKOFF_MS = 5000;
 
 /**
  * Worker for `message-send` queue. Responsibilities per job:
@@ -38,11 +41,17 @@ export class MessageSendProcessor extends WorkerHost {
   private readonly minDelay: number;
   private readonly maxDelay: number;
   private readonly dailyCap: number;
+  private readonly lockAcquireTimeoutMs: number;
+  private readonly retryBaseDelayMs: number;
+  private readonly retryMaxDelayMs: number;
+  private readonly dailyCapRetryDelayMs: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly wa: WhatsAppService,
-    private readonly gateway: WhatsAppGateway
+    private readonly gateway: WhatsAppGateway,
+    @InjectQueue(MESSAGE_SEND_QUEUE)
+    private readonly sendQueue: Queue<SendJobData>
   ) {
     super();
     this.redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
@@ -54,10 +63,35 @@ export class MessageSendProcessor extends WorkerHost {
       process.env.DAILY_MESSAGE_CAP_PER_TENANT || "100",
       10
     );
+    this.lockAcquireTimeoutMs = parseInt(
+      process.env.TENANT_LOCK_ACQUIRE_TIMEOUT_MS || "180000",
+      10
+    );
+    this.retryBaseDelayMs = parseInt(
+      process.env.MESSAGE_RETRY_BASE_DELAY_MS || "30000",
+      10
+    );
+    this.retryMaxDelayMs = parseInt(
+      process.env.MESSAGE_RETRY_MAX_DELAY_MS || "900000",
+      10
+    );
+    this.dailyCapRetryDelayMs = parseInt(
+      process.env.DAILY_CAP_RETRY_DELAY_MS || "600000",
+      10
+    );
   }
 
   async process(job: Job<SendJobData>): Promise<void> {
     const data = job.data;
+
+    // Skip duplicate/replayed jobs if already finalized.
+    const log = await this.prisma.messageLog.findUnique({
+      where: { id: data.logId },
+      select: { status: true }
+    });
+    if (!log || log.status === "sent") {
+      return;
+    }
 
     // -- Daily cap check (tenant-local "today")
     const tenant = await this.prisma.tenant.findUnique({
@@ -77,16 +111,31 @@ export class MessageSendProcessor extends WorkerHost {
     });
 
     if (todayCount > this.dailyCap) {
-      await this.markFailed(data, "daily_cap_exceeded");
-      // Do NOT throw — we don't want BullMQ to retry past the cap.
+      await this.reschedulePending(
+        data,
+        "daily_cap_wait",
+        this.dailyCapRetryDelayMs
+      );
       return;
     }
 
     // -- Per-tenant serialization + anti-ban jitter
     const lockKey = `wa:lock:tenant:${data.tenantId}`;
-    const acquired = await this.acquireLock(lockKey);
-    if (!acquired) {
-      // Another job for this tenant is in flight; throwing triggers retry with backoff.
+    const lockToken = await this.acquireLock(
+      lockKey,
+      this.lockAcquireTimeoutMs
+    );
+    if (!lockToken) {
+      if (job.attemptsMade + 1 >= (job.opts.attempts ?? 1)) {
+        await this.reschedulePending(
+          data,
+          "tenant_lock_busy",
+          this.computeRetryDelay(job.attemptsMade + 1)
+        );
+        return;
+      }
+
+      // Another job for this tenant is in flight; let BullMQ retry with backoff.
       throw new Error("tenant_lock_busy");
     }
 
@@ -117,15 +166,19 @@ export class MessageSendProcessor extends WorkerHost {
         });
       } catch (e: any) {
         const reason = e?.message || "send_failed";
-        // Last attempt? Let BullMQ retry — it will re-enter this worker until attempts exhausted.
+        // Last in-job attempt? Requeue with delay instead of terminal failure.
         if (job.attemptsMade + 1 >= (job.opts.attempts ?? 1)) {
-          await this.markFailed(data, reason);
+          await this.reschedulePending(
+            data,
+            reason,
+            this.computeRetryDelay(job.attemptsMade + 1)
+          );
           return;
         }
         throw e;
       }
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, lockToken);
     }
   }
 
@@ -143,19 +196,69 @@ export class MessageSendProcessor extends WorkerHost {
     });
   }
 
-  private async acquireLock(key: string): Promise<boolean> {
-    // Best-effort spin: try a few times across ~1s before giving up.
-    for (let i = 0; i < 5; i++) {
-      const res = await this.redis.set(key, "1", "PX", LOCK_TTL_MS, "NX");
-      if (res === "OK") return true;
-      await sleep(200 + Math.random() * 200);
-    }
-    return false;
+  private async reschedulePending(
+    data: SendJobData,
+    reason: string,
+    delayMs: number
+  ) {
+    await this.prisma.messageLog.update({
+      where: { id: data.logId },
+      data: { status: "pending", errorReason: reason }
+    });
+
+    await this.sendQueue.add("send", data, {
+      // Unique retry job id prevents collision with active/completed job ids.
+      jobId: `${data.logId}:retry:${Date.now()}:${Math.floor(Math.random() * 1000)}`,
+      delay: Math.max(delayMs, 1000),
+      attempts: RETRY_ATTEMPTS,
+      backoff: { type: "exponential", delay: RETRY_BACKOFF_MS },
+      removeOnComplete: true,
+      removeOnFail: true
+    });
+
+    this.gateway.emitToTenant(data.tenantId, "log:updated", {
+      id: data.logId,
+      status: "pending",
+      scheduleId: data.scheduleId,
+      groupJid: data.groupJid,
+      errorReason: reason,
+      retryInMs: Math.max(delayMs, 1000)
+    });
   }
 
-  private async releaseLock(key: string) {
+  private computeRetryDelay(attemptNumber: number): number {
+    const exp = Math.min(
+      this.retryBaseDelayMs * Math.pow(2, Math.max(attemptNumber - 1, 0)),
+      this.retryMaxDelayMs
+    );
+    return Math.floor(exp * (0.9 + Math.random() * 0.2));
+  }
+
+  private async acquireLock(
+    key: string,
+    timeoutMs: number
+  ): Promise<string | null> {
+    // Wait up to a bounded timeout so fan-out jobs (many groups) can serialize
+    // under one tenant lock without dropping later jobs.
+    const deadline = Date.now() + Math.max(timeoutMs, 0);
+    const token = randomUUID();
+    while (Date.now() < deadline) {
+      const res = await this.redis.set(key, token, "PX", LOCK_TTL_MS, "NX");
+      if (res === "OK") return token;
+      await sleep(200 + Math.random() * 200);
+    }
+    return null;
+  }
+
+  private async releaseLock(key: string, token: string) {
     try {
-      await this.redis.del(key);
+      // Release only if we still own the lock token.
+      await this.redis.eval(
+        `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,
+        1,
+        key,
+        token
+      );
     } catch {
       /* ignore */
     }

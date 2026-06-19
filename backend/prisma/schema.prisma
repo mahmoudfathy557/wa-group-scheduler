@@ -126,4 +126,6 @@ model MessageLog {
 
   @@index([tenantId, createdAt])
   @@index([scheduleId, runId])
+  @@unique([tenantId, runId, groupJid])
+  @@index([status, createdAt])
 }
