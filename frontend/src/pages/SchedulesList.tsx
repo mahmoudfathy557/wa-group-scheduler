@@ -2,6 +2,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { api } from "../lib/api";
+import { Button } from "../components/ui/Button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle
+} from "../components/ui/Card";
+import { Badge } from "../components/ui/Badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "../components/ui/Table";
 
 interface Schedule {
   id: string;
@@ -52,125 +68,107 @@ export function SchedulesList() {
   });
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
-      <div className="p-4 sm:p-6 border-b">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-            Schedules
-          </h2>
-          <Link
-            to="/schedules/new"
-            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition text-center text-sm sm:text-base"
-          >
-            + New schedule
-          </Link>
-        </div>
-      </div>
-      <div className="p-4 sm:p-6">
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Schedules</CardTitle>
+        <Link to="/schedules/new">
+          <Button size="sm">+ New schedule</Button>
+        </Link>
+      </CardHeader>
+      <CardContent>
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <p className="text-gray-500">Loading schedules…</p>
+            <p className="text-muted-foreground">Loading schedules…</p>
           </div>
         ) : !data || data.length === 0 ? (
-          <p className="text-center text-gray-500 py-8">
+          <p className="text-center text-muted-foreground py-8">
             No schedules yet. Create your first one!
           </p>
         ) : (
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <table className="w-full text-xs sm:text-sm">
-              <thead className="bg-gray-50 text-left border-b border-gray-200">
-                <tr>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700">
-                    Message
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden md:table-cell">
-                    Cron
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden lg:table-cell">
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Message</TableHead>
+                  <TableHead className="hidden md:table-cell">Cron</TableHead>
+                  <TableHead className="hidden lg:table-cell">
                     Timezone
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden sm:table-cell">
-                    Groups
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden lg:table-cell">
+                  </TableHead>
+                  <TableHead className="hidden sm:table-cell">Groups</TableHead>
+                  <TableHead className="hidden lg:table-cell">
                     Next run
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700">
-                    Status
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 text-right">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
+                  </TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50 align-top">
-                    <td className="px-4 sm:px-0 py-3">
-                      <p className="text-gray-900 font-medium max-w-xs sm:max-w-sm truncate">
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <p className="font-medium max-w-xs sm:max-w-sm truncate">
                         {s.messageText}
                       </p>
-                      <div className="md:hidden text-xs text-gray-500 mt-1">
+                      <div className="md:hidden text-xs text-muted-foreground mt-1">
                         {s.cronExpression}
                       </div>
-                    </td>
-                    <td className="px-4 sm:px-0 py-3 font-mono text-xs text-gray-600 hidden md:table-cell">
+                    </TableCell>
+                    <TableCell className="font-mono text-xs hidden md:table-cell">
                       {s.cronExpression}
-                    </td>
-                    <td className="px-4 sm:px-0 py-3 text-gray-600 hidden lg:table-cell">
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       {s.timezone}
-                    </td>
-                    <td className="px-4 sm:px-0 py-3 text-gray-600 hidden sm:table-cell">
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       {s.groupLinks.length}
-                    </td>
-                    <td className="px-4 sm:px-0 py-3 text-xs sm:text-sm text-gray-600 hidden lg:table-cell">
+                    </TableCell>
+                    <TableCell className="text-xs hidden lg:table-cell">
                       {s.nextRunAt
                         ? formatInTimezone(s.nextRunAt, s.timezone)
                         : "—"}
-                    </td>
-                    <td className="px-4 sm:px-0 py-3">
-                      <span
-                        className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${
-                          s.status === "active"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-gray-100 text-gray-600"
-                        }`}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          s.status === "active" ? "default" : "secondary"
+                        }
                       >
                         {s.status}
-                      </span>
-                    </td>
-                    <td className="px-4 sm:px-0 py-3 text-right">
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
                       <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 justify-end">
-                        <button
+                        <Button
                           onClick={() => toggle.mutate(s)}
-                          className="text-emerald-600 hover:text-emerald-700 font-medium text-xs sm:text-sm"
+                          variant="ghost"
+                          size="sm"
                         >
                           {s.status === "active" ? "Pause" : "Resume"}
-                        </button>
-                        <Link
-                          to={`/schedules/${s.id}/edit`}
-                          className="text-blue-600 hover:text-blue-700 font-medium text-xs sm:text-sm"
-                        >
-                          Edit
+                        </Button>
+                        <Link to={`/schedules/${s.id}/edit`}>
+                          <Button variant="ghost" size="sm">
+                            Edit
+                          </Button>
                         </Link>
-                        <button
+                        <Button
                           onClick={() =>
                             confirm("Delete this schedule?") &&
                             remove.mutate(s.id)
                           }
-                          className="text-red-600 hover:text-red-700 font-medium text-xs sm:text-sm"
+                          variant="destructive"
+                          size="sm"
                         >
                           Delete
-                        </button>
+                        </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

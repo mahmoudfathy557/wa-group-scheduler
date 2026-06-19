@@ -2,6 +2,23 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { Button } from "../components/ui/Button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "../components/ui/Card";
+import { Badge } from "../components/ui/Badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "../components/ui/Table";
 
 interface Log {
   id: string;
@@ -40,128 +57,116 @@ export function Logs() {
     (groups ?? []).map((group) => [group.groupJid, group.name])
   );
 
+  const statusVariantMap: Record<
+    string,
+    "default" | "secondary" | "destructive"
+  > = {
+    sent: "default",
+    failed: "destructive",
+    pending: "secondary"
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
-      <div className="p-4 sm:p-6 border-b">
+    <Card>
+      <CardHeader>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-            Message logs
-          </h2>
+          <div>
+            <CardTitle>Message logs</CardTitle>
+            <CardDescription>Auto-pruned after 7 days</CardDescription>
+          </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition flex-1 sm:flex-none"
+              className="border border-input rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-ring focus:border-transparent transition flex-1 sm:flex-none bg-background"
             >
               <option value="">All statuses</option>
               <option value="pending">Pending</option>
               <option value="sent">Sent</option>
               <option value="failed">Failed</option>
             </select>
-            <button
-              onClick={() => refetch()}
-              className="border border-gray-300 hover:bg-gray-50 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition"
-            >
+            <Button onClick={() => refetch()} variant="outline" size="sm">
               ↻ Refresh
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
+      </CardHeader>
 
-      <div className="p-4 sm:p-6">
+      <CardContent>
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <p className="text-gray-500">Loading logs…</p>
+            <p className="text-muted-foreground">Loading logs…</p>
           </div>
         ) : !data || data.length === 0 ? (
-          <p className="text-center text-gray-500 py-8">No logs yet.</p>
+          <p className="text-center text-muted-foreground py-8">No logs yet.</p>
         ) : (
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <table className="w-full text-xs sm:text-sm">
-              <thead className="bg-gray-50 text-left border-b border-gray-200">
-                <tr>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700">
-                    Time
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden sm:table-cell">
-                    Group
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700">
-                    Status
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden lg:table-cell">
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead className="hidden sm:table-cell">Group</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden lg:table-cell">
                     Next retry
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden md:table-cell">
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell">
                     Details
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.map((l) => (
-                  <tr key={l.id} className="hover:bg-gray-50">
-                    <td className="px-4 sm:px-0 py-3">
-                      <p className="text-gray-900 font-medium text-xs sm:text-sm">
+                  <TableRow key={l.id}>
+                    <TableCell>
+                      <p className="font-medium text-sm">
                         {new Date(l.createdAt).toLocaleString()}
                       </p>
-                      <div className="sm:hidden text-xs text-gray-500 mt-1 break-all">
+                      <div className="sm:hidden text-xs text-muted-foreground mt-1 break-all">
                         {groupNameByJid[l.groupJid] || l.groupJid}
                       </div>
-                    </td>
-                    <td className="px-4 sm:px-0 py-3 font-mono text-xs text-gray-600 hidden sm:table-cell break-all max-w-xs">
+                    </TableCell>
+                    <TableCell className="font-mono text-xs hidden sm:table-cell break-all max-w-xs">
                       {groupNameByJid[l.groupJid] || l.groupJid}
-                    </td>
-                    <td className="px-4 sm:px-0 py-3">
-                      <span
-                        className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${
-                          l.status === "sent"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : l.status === "failed"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-amber-100 text-amber-700"
-                        }`}
-                      >
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariantMap[l.status]}>
                         {l.status}
-                      </span>
+                      </Badge>
                       {l.status !== "sent" ? (
-                        <div className="lg:hidden text-xs text-gray-500 mt-1">
+                        <div className="lg:hidden text-xs text-muted-foreground mt-1">
                           Next:{" "}
                           {l.nextRetryAt
                             ? new Date(l.nextRetryAt).toLocaleString()
                             : "Unknown"}
                         </div>
                       ) : null}
-                    </td>
-                    <td className="px-4 sm:px-0 py-3 text-xs text-gray-600 hidden lg:table-cell">
+                    </TableCell>
+                    <TableCell className="text-xs hidden lg:table-cell">
                       {l.status === "sent"
                         ? "—"
                         : l.nextRetryAt
                           ? new Date(l.nextRetryAt).toLocaleString()
                           : "Unknown"}
-                    </td>
-                    <td className="px-4 sm:px-0 py-3 text-xs text-gray-600 hidden md:table-cell break-all">
+                    </TableCell>
+                    <TableCell className="text-xs hidden md:table-cell break-all">
                       {l.errorReason || l.whatsappMessageId || "—"}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
-      </div>
+      </CardContent>
 
-      <div className="px-4 sm:px-6 pb-4 sm:pb-6">
-        <Link
-          to="/retry-center"
-          className="inline-flex items-center rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
-        >
-          Open retry center
+      <div className="px-6 py-4 border-t">
+        <Link to="/retry-center">
+          <Button variant="outline" size="sm">
+            Open retry center
+          </Button>
         </Link>
       </div>
-
-      <div className="p-4 sm:p-6 bg-gray-50 border-t text-xs text-gray-500">
-        Logs auto-pruned after 7 days.
-      </div>
-    </div>
+    </Card>
   );
 }

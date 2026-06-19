@@ -5,10 +5,20 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import toast from "react-hot-toast";
 import { useAuth } from "../hooks/useAuth";
+import { Button } from "../components/ui/Button";
+import { Input } from "../components/ui/Input";
+import { Label } from "../components/ui/Label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "../components/ui/Card";
 
 const schema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1)
+  email: z.string().email("Please enter a valid email"),
+  password: z.string().min(1, "Password is required")
 });
 type FormVals = z.infer<typeof schema>;
 
@@ -37,67 +47,64 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 py-8">
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="bg-white p-6 sm:p-8 rounded-lg shadow-md w-full max-w-sm space-y-4"
-      >
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-          Sign in
-        </h1>
-        <p className="text-sm sm:text-base text-gray-600">
-          Enter your credentials to continue
-        </p>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Email address
-          </label>
-          <input
-            {...register("email")}
-            type="email"
-            placeholder="you@example.com"
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
-          />
-          {errors.email && (
-            <p className="text-red-600 text-xs sm:text-sm mt-1">
-              {errors.email.message}
-            </p>
-          )}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Password
-          </label>
-          <input
-            type="password"
-            {...register("password")}
-            placeholder="••••••••"
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
-          />
-          {errors.password && (
-            <p className="text-red-600 text-xs sm:text-sm mt-1">
-              {errors.password.message}
-            </p>
-          )}
-        </div>
-        <button
-          disabled={busy}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition text-sm sm:text-base"
-        >
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-        <div className="border-t pt-4">
-          <p className="text-xs sm:text-sm text-gray-600 text-center">
-            Don't have an account?{" "}
-            <Link
-              to="/register"
-              className="font-semibold text-emerald-600 hover:text-emerald-700"
-            >
-              Create one
-            </Link>
-          </p>
-        </div>
-      </form>
+    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-8">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle className="text-3xl">Sign in</CardTitle>
+          <CardDescription>
+            Enter your credentials to access WA Scheduler
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email address</Label>
+              <Input
+                id="email"
+                {...register("email")}
+                type="email"
+                placeholder="you@example.com"
+              />
+              {errors.email && (
+                <p className="text-sm text-destructive">
+                  {errors.email.message}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                {...register("password")}
+                placeholder="••••••••"
+              />
+              {errors.password && (
+                <p className="text-sm text-destructive">
+                  {errors.password.message}
+                </p>
+              )}
+            </div>
+
+            <Button type="submit" disabled={busy} className="w-full" size="lg">
+              {busy ? "Signing in…" : "Sign in"}
+            </Button>
+
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground">
+                Don't have an account?{" "}
+                <Link
+                  to="/register"
+                  className="font-semibold text-primary hover:underline"
+                >
+                  Create one
+                </Link>
+              </p>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

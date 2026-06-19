@@ -2,6 +2,23 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { api } from "../lib/api";
+import { Button } from "../components/ui/Button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "../components/ui/Card";
+import { Badge } from "../components/ui/Badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "../components/ui/Table";
 
 interface Log {
   id: string;
@@ -66,128 +83,119 @@ export function RetryCenter() {
     (groups ?? []).map((group) => [group.groupJid, group.name])
   );
 
+  const statusVariantMap: Record<
+    string,
+    "default" | "secondary" | "destructive"
+  > = {
+    failed: "destructive",
+    pending: "secondary"
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
-      <div className="p-4 sm:p-6 border-b">
+    <Card>
+      <CardHeader>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-              Retry center
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
+            <CardTitle>Retry center</CardTitle>
+            <CardDescription>
               Resend pending or failed messages from a dedicated action view.
-            </p>
+            </CardDescription>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <button
-              onClick={() => refetch()}
-              className="border border-gray-300 hover:bg-gray-50 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition"
-            >
+            <Button onClick={() => refetch()} variant="outline" size="sm">
               ↻ Refresh
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => clearLogsMutation.mutate()}
               disabled={clearLogsMutation.isPending}
-              className="border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg px-4 py-2 text-sm font-medium text-amber-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              variant="outline"
+              size="sm"
             >
               {clearLogsMutation.isPending ? "Clearing..." : "Clear from view"}
-            </button>
+            </Button>
           </div>
         </div>
         {clearError ? (
-          <p className="text-sm text-red-600 mt-3">{clearError}</p>
+          <p className="text-sm text-destructive mt-3">{clearError}</p>
         ) : null}
-      </div>
+      </CardHeader>
 
-      <div className="p-4 sm:p-6">
+      <CardContent>
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <p className="text-gray-500">Loading retry items…</p>
+            <p className="text-muted-foreground">Loading retry items…</p>
           </div>
         ) : actionableLogs.length === 0 ? (
-          <p className="text-center text-gray-500 py-8">
+          <p className="text-center text-muted-foreground py-8">
             No pending or failed messages right now.
           </p>
         ) : (
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <table className="w-full text-xs sm:text-sm">
-              <thead className="bg-gray-50 text-left border-b border-gray-200">
-                <tr>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700">
-                    Time
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden sm:table-cell">
-                    Group
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700">
-                    Status
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden lg:table-cell">
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead className="hidden sm:table-cell">Group</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden lg:table-cell">
                     Next retry
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700 hidden md:table-cell">
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell">
                     Details
-                  </th>
-                  <th className="px-4 sm:px-0 py-3 font-semibold text-gray-700">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
+                  </TableHead>
+                  <TableHead>Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {actionableLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-gray-50">
-                    <td className="px-4 sm:px-0 py-3">
-                      <p className="text-gray-900 font-medium text-xs sm:text-sm">
+                  <TableRow key={log.id}>
+                    <TableCell>
+                      <p className="font-medium text-sm">
                         {new Date(log.createdAt).toLocaleString()}
                       </p>
-                      <div className="sm:hidden text-xs text-gray-500 mt-1 break-all">
+                      <div className="sm:hidden text-xs text-muted-foreground mt-1 break-all">
                         {groupNameByJid[log.groupJid] || log.groupJid}
                       </div>
-                    </td>
-                    <td className="px-4 sm:px-0 py-3 font-mono text-xs text-gray-600 hidden sm:table-cell break-all max-w-xs">
+                    </TableCell>
+                    <TableCell className="font-mono text-xs hidden sm:table-cell break-all max-w-xs">
                       {groupNameByJid[log.groupJid] || log.groupJid}
-                    </td>
-                    <td className="px-4 sm:px-0 py-3">
-                      <span
-                        className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${
-                          log.status === "failed"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-amber-100 text-amber-700"
-                        }`}
-                      >
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariantMap[log.status]}>
                         {log.status}
-                      </span>
-                      <div className="lg:hidden text-xs text-gray-500 mt-1">
+                      </Badge>
+                      <div className="lg:hidden text-xs text-muted-foreground mt-1">
                         Next:{" "}
                         {log.nextRetryAt
                           ? new Date(log.nextRetryAt).toLocaleString()
                           : "Unknown"}
                       </div>
-                    </td>
-                    <td className="px-4 sm:px-0 py-3 text-xs text-gray-600 hidden lg:table-cell">
+                    </TableCell>
+                    <TableCell className="text-xs hidden lg:table-cell">
                       {log.nextRetryAt
                         ? new Date(log.nextRetryAt).toLocaleString()
                         : "Unknown"}
-                    </td>
-                    <td className="px-4 sm:px-0 py-3 text-xs text-gray-600 hidden md:table-cell break-all">
+                    </TableCell>
+                    <TableCell className="text-xs hidden md:table-cell break-all">
                       {log.errorReason || log.whatsappMessageId || "—"}
-                    </td>
-                    <td className="px-4 sm:px-0 py-3">
-                      <button
+                    </TableCell>
+                    <TableCell>
+                      <Button
                         onClick={() => resendMutation.mutate(log.id)}
                         disabled={resendMutation.isPending}
-                        className="border border-blue-300 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5 text-xs font-medium text-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                        variant="outline"
+                        size="sm"
                       >
                         {resendMutation.isPending ? "Sending..." : "Send now"}
-                      </button>
-                    </td>
-                  </tr>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

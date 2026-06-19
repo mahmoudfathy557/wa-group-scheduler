@@ -13,6 +13,8 @@ import {
   MIN_CRON_INTERVAL_MINUTES,
   violatesMinCronInterval
 } from "../components/CronBuilder";
+import { Button } from "../components/ui/Button";
+import { Label } from "../components/ui/Label";
 
 const schema = z.object({
   messageText: z.string().min(1).max(4096),
@@ -168,228 +170,223 @@ export function ScheduleForm() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit(onSubmit)}
-      className="bg-white rounded-lg shadow-md p-4 sm:p-6 max-w-full sm:max-w-2xl space-y-5"
-    >
-      <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
-        {isEdit ? "Edit schedule" : "New schedule"}
-      </h2>
+    <div className="max-w-2xl">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold">
+            {isEdit ? "Edit schedule" : "New schedule"}
+          </h2>
+        </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Message text
-        </label>
-        <div className="relative">
-          <textarea
-            {...register("messageText")}
-            rows={5}
-            placeholder="Enter the message you want to send"
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition resize-vertical"
-          />
-          <button
-            type="button"
-            className="absolute right-3 bottom-3 border border-gray-300 hover:bg-gray-50 rounded-lg px-3 py-1.5 text-xs sm:text-sm bg-white font-medium transition"
-            onClick={() => setShowEmojiPicker((s) => !s)}
-          >
-            😀 Emoji
-          </button>
-          {showEmojiPicker && (
-            <div
-              className="absolute right-0 mt-2 z-20 border border-gray-200 rounded-lg shadow-lg bg-white"
-              style={{ maxHeight: "400px", overflowY: "auto" }}
+        <div className="space-y-2">
+          <Label htmlFor="messageText">Message text</Label>
+          <div className="relative">
+            <textarea
+              id="messageText"
+              {...register("messageText")}
+              rows={5}
+              placeholder="Enter the message you want to send"
+              className="w-full border border-input rounded-md px-4 py-3 text-sm focus:ring-2 focus:ring-ring focus:border-transparent transition resize-vertical bg-background"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="absolute right-3 bottom-3"
+              onClick={() => setShowEmojiPicker((s) => !s)}
             >
-              <EmojiPicker onEmojiClick={onEmojiClick} />
+              😀 Emoji
+            </Button>
+            {showEmojiPicker && (
+              <div
+                className="absolute right-0 mt-2 z-20 border border-border rounded-lg shadow-lg bg-background"
+                style={{ maxHeight: "400px", overflowY: "auto" }}
+              >
+                <EmojiPicker onEmojiClick={onEmojiClick} />
+              </div>
+            )}
+          </div>
+          {errors.messageText && (
+            <p className="text-sm text-destructive">
+              {errors.messageText.message}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="images">Images (up to 5)</Label>
+          <input
+            id="images"
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => {
+              onSelectImages(e.target.files);
+              e.currentTarget.value = "";
+            }}
+            className="block w-full text-sm border border-input rounded-md px-4 py-2 focus:ring-2 focus:ring-ring focus:border-transparent transition bg-background"
+          />
+
+          {(imageUrls.length > 0 || filePreviews.length > 0) && (
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {imageUrls.map((url) => (
+                <div
+                  key={url}
+                  className="relative border-2 border-border rounded-lg overflow-hidden group hover:border-primary transition"
+                >
+                  <img
+                    src={url}
+                    alt="Schedule attachment"
+                    className="w-full h-24 sm:h-28 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeExistingImage(url)}
+                    variant="ghost"
+                    className="absolute top-1 right-1 bg-background border border-border hover:bg-destructive hover:text-destructive-foreground rounded-md px-2 py-1 text-xs font-medium opacity-0 group-hover:opacity-100 transition"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+
+              {filePreviews.map((file, idx) => (
+                <div
+                  key={`${file.name}-${idx}`}
+                  className="relative border-2 border-dashed border-primary rounded-lg overflow-hidden group hover:border-primary transition"
+                >
+                  <img
+                    src={file.url}
+                    alt={file.name}
+                    className="w-full h-24 sm:h-28 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSelectedFile(idx)}
+                    className="absolute top-1 right-1 bg-background border border-border hover:bg-destructive hover:text-destructive-foreground rounded-md px-2 py-1 text-xs font-medium opacity-0 group-hover:opacity-100 transition"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>
-        {errors.messageText && (
-          <p className="text-red-600 text-xs sm:text-sm mt-1">
-            {errors.messageText.message}
-          </p>
-        )}
-      </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Images (up to 5)
-        </label>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => {
-            onSelectImages(e.target.files);
-            e.currentTarget.value = "";
-          }}
-          className="block w-full text-xs sm:text-sm border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
-        />
-
-        {(imageUrls.length > 0 || filePreviews.length > 0) && (
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {imageUrls.map((url) => (
-              <div
-                key={url}
-                className="relative border-2 border-gray-200 rounded-lg overflow-hidden group hover:border-emerald-400 transition"
-              >
-                <img
-                  src={url}
-                  alt="Schedule attachment"
-                  className="w-full h-24 sm:h-28 object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeExistingImage(url)}
-                  className="absolute top-1 right-1 bg-white border border-gray-300 hover:bg-red-50 rounded-md px-2 py-1 text-xs font-medium opacity-0 group-hover:opacity-100 transition"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-
-            {filePreviews.map((file, idx) => (
-              <div
-                key={`${file.name}-${idx}`}
-                className="relative border-2 border-dashed border-emerald-300 rounded-lg overflow-hidden group hover:border-emerald-500 transition"
-              >
-                <img
-                  src={file.url}
-                  alt={file.name}
-                  className="w-full h-24 sm:h-28 object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeSelectedFile(idx)}
-                  className="absolute top-1 right-1 bg-white border border-gray-300 hover:bg-red-50 rounded-md px-2 py-1 text-xs font-medium opacity-0 group-hover:opacity-100 transition"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Schedule
-        </label>
-        <Controller
-          name="cronExpression"
-          control={control}
-          render={({ field }) => (
-            <CronBuilder
-              value={field.value}
-              onChange={field.onChange}
-              error={errors.cronExpression?.message}
-            />
-          )}
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Timezone
-        </label>
-        <Controller
-          name="timezone"
-          control={control}
-          render={({ field }) => (
-            <TimezoneSelect
-              value={field.value}
-              onChange={(tz) =>
-                field.onChange(typeof tz === "string" ? tz : tz.value)
-              }
-            />
-          )}
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Groups
-        </label>
-        <Controller
-          name="groupIds"
-          control={control}
-          render={({ field }) => (
-            <>
-              <input
-                type="text"
-                placeholder="Search groups..."
-                value={groupFilter}
-                onChange={(e) => setGroupFilter(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+        <div className="space-y-2">
+          <Label>Schedule</Label>
+          <Controller
+            name="cronExpression"
+            control={control}
+            render={({ field }) => (
+              <CronBuilder
+                value={field.value}
+                onChange={field.onChange}
+                error={errors.cronExpression?.message}
               />
-              <div className="border border-gray-300 rounded-lg p-3 max-h-64 overflow-auto">
-                {!groups || groups.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    No groups found. Sync from the Groups page first.
-                  </p>
-                ) : (
-                  groups
-                    .filter((g) =>
-                      g.name.toLowerCase().includes(groupFilter.toLowerCase())
-                    )
-                    .map((g) => (
-                      <label
-                        key={g.id}
-                        className="flex items-center gap-3 py-2 px-2 hover:bg-gray-50 rounded-lg cursor-pointer transition"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={field.value.includes(g.id)}
-                          onChange={(e) => {
-                            const next = e.target.checked
-                              ? [...field.value, g.id]
-                              : field.value.filter((x) => x !== g.id);
-                            field.onChange(next);
-                          }}
-                          className="w-4 h-4 text-emerald-600 rounded focus:ring-2 focus:ring-emerald-500"
-                        />
-                        <span className="text-sm text-gray-900">{g.name}</span>
-                      </label>
-                    ))
-                )}
-              </div>
-            </>
-          )}
-        />
-        {errors.groupIds && (
-          <p className="text-red-600 text-xs sm:text-sm mt-2">
-            {errors.groupIds.message as string}
-          </p>
-        )}
-      </div>
-
-      <div className="border-t pt-5">
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            {...register("runNow")}
-            className="w-4 h-4 text-emerald-600 rounded focus:ring-2 focus:ring-emerald-500"
+            )}
           />
-          <span className="text-sm sm:text-base text-gray-700">
-            Send immediately, then continue scheduled runs
-          </span>
-        </label>
-      </div>
+        </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 pt-2">
-        <button
-          disabled={isSubmitting}
-          className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6 py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition text-sm sm:text-base"
-        >
-          {isSubmitting ? "Saving…" : "Save schedule"}
-        </button>
-        <button
-          type="button"
-          onClick={() => nav("/schedules")}
-          className="flex-1 sm:flex-none border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium px-6 py-2.5 rounded-lg transition text-sm sm:text-base"
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
+        <div className="space-y-2">
+          <Label>Timezone</Label>
+          <Controller
+            name="timezone"
+            control={control}
+            render={({ field }) => (
+              <TimezoneSelect
+                value={field.value}
+                onChange={(tz) =>
+                  field.onChange(typeof tz === "string" ? tz : tz.value)
+                }
+              />
+            )}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="groupSearch">Groups</Label>
+          <Controller
+            name="groupIds"
+            control={control}
+            render={({ field }) => (
+              <>
+                <input
+                  id="groupSearch"
+                  type="text"
+                  placeholder="Search groups..."
+                  value={groupFilter}
+                  onChange={(e) => setGroupFilter(e.target.value)}
+                  className="w-full border border-input rounded-md px-4 py-2 text-sm focus:ring-2 focus:ring-ring focus:border-transparent transition bg-background"
+                />
+                <div className="border border-input rounded-md p-3 max-h-64 overflow-auto">
+                  {!groups || groups.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No groups found. Sync from the Groups page first.
+                    </p>
+                  ) : (
+                    groups
+                      .filter((g) =>
+                        g.name.toLowerCase().includes(groupFilter.toLowerCase())
+                      )
+                      .map((g) => (
+                        <label
+                          key={g.id}
+                          className="flex items-center gap-3 py-2 px-2 hover:bg-muted rounded-md cursor-pointer transition"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={field.value.includes(g.id)}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? [...field.value, g.id]
+                                : field.value.filter((x) => x !== g.id);
+                              field.onChange(next);
+                            }}
+                            className="w-4 h-4 rounded focus:ring-2 focus:ring-ring"
+                          />
+                          <span className="text-sm">{g.name}</span>
+                        </label>
+                      ))
+                  )}
+                </div>
+              </>
+            )}
+          />
+          {errors.groupIds && (
+            <p className="text-sm text-destructive">
+              {errors.groupIds.message as string}
+            </p>
+          )}
+        </div>
+
+        <div className="border-t pt-6">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              {...register("runNow")}
+              className="w-4 h-4 rounded focus:ring-2 focus:ring-ring"
+            />
+            <span className="text-sm font-medium">
+              Send immediately, then continue scheduled runs
+            </span>
+          </label>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 pt-4">
+          <Button type="submit" disabled={isSubmitting} size="lg">
+            {isSubmitting ? "Saving…" : "Save schedule"}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => nav("/schedules")}
+            variant="outline"
+            size="lg"
+          >
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 }

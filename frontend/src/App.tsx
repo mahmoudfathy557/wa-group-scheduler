@@ -15,6 +15,7 @@ import { SchedulesList } from "./pages/SchedulesList";
 import { ScheduleForm } from "./pages/ScheduleForm";
 import { Logs } from "./pages/Logs";
 import { RetryCenter } from "./pages/RetryCenter";
+import { Button } from "./components/ui/Button";
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -24,16 +25,16 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
   const link = ({ isActive }: { isActive: boolean }) =>
     `block px-3 py-2 rounded text-sm font-medium transition-colors ${
-      isActive ? "bg-emerald-600 text-white" : "text-gray-700 hover:bg-gray-100"
+      isActive
+        ? "bg-primary text-primary-foreground"
+        : "text-foreground hover:bg-muted"
     }`;
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b bg-white">
+      <header className="border-b bg-background">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg sm:text-xl font-semibold text-gray-900">
-            WA Scheduler
-          </h1>
+          <h1 className="text-lg sm:text-xl font-semibold">WA Scheduler</h1>
           <nav className="hidden md:flex gap-1">
             <NavLink to="/connect" className={link}>
               Connect
@@ -54,7 +55,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setMobileNavOpen(!mobileNavOpen)}
-              className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded"
+              className="md:hidden p-2 text-foreground hover:bg-muted rounded"
             >
               <svg
                 className="w-5 h-5"
@@ -70,23 +71,24 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
                 />
               </svg>
             </button>
-            <span className="hidden sm:inline text-xs sm:text-sm text-gray-500">
+            <span className="hidden sm:inline text-xs sm:text-sm text-muted-foreground">
               {user.email}
             </span>
-            <button
+            <Button
               onClick={() => {
                 logout();
                 navigate("/login");
               }}
-              className="text-xs sm:text-sm text-gray-600 hover:text-gray-900 font-medium"
+              variant="ghost"
+              size="sm"
             >
               Logout
-            </button>
+            </Button>
           </div>
         </div>
         {/* Mobile menu */}
         {mobileNavOpen && (
-          <nav className="md:hidden border-t bg-gray-50 px-4 py-2">
+          <nav className="md:hidden border-t bg-muted px-4 py-2">
             <NavLink
               to="/connect"
               className={({ isActive }) => link({ isActive })}
