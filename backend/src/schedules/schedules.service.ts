@@ -142,11 +142,11 @@ export class SchedulesService {
     const cron = dto.cronExpression ?? existing.cronExpression;
     const tz = dto.timezone ?? existing.timezone;
     const isIntervalSchedule = parseIntervalFromCron(cron);
-    const shouldResetIntervalAnchor =
-      dto.cronExpression !== undefined || dto.status === "active";
+    const cronOrTzChanged =
+      dto.cronExpression !== undefined || dto.timezone !== undefined;
     const intervalMinutes = isIntervalSchedule;
     const intervalAnchorAt = intervalMinutes
-      ? shouldResetIntervalAnchor
+      ? cronOrTzChanged
         ? new Date()
         : (existing.intervalAnchorAt ?? new Date())
       : null;
@@ -164,12 +164,23 @@ export class SchedulesService {
     if (dto.timezone !== undefined) data.timezone = dto.timezone;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.imageUrls !== undefined) data.imageUrls = dto.imageUrls;
-    if (dto.cronExpression !== undefined || dto.status === "active") {
+    if (cronOrTzChanged) {
+      // Cron or timezone changed: full recalculation with fresh anchor.
       data.intervalMinutes = intervalMinutes;
       data.intervalAnchorAt = intervalAnchorAt;
       data.nextRunAt = intervalMinutes
         ? nextRunFromAnchor(intervalAnchorAt as Date, intervalMinutes)
         : nextRun(cron, tz);
+    } else if (dto.status === "active") {
+      // Resuming: keep existing nextRunAt if it's still in the future;
+      // only recalculate if it's missing or already past.
+      const now = new Date();
+      if (!existing.nextRunAt || existing.nextRunAt <= now) {
+        const anchor = existing.intervalAnchorAt ?? now;
+        data.nextRunAt = intervalMinutes
+          ? nextRunFromAnchor(anchor, intervalMinutes)
+          : nextRun(cron, tz);
+      }
     }
 
     if (dto.groupIds) {
@@ -404,6 +415,6 @@ export class SchedulesService {
 }
 
 function nextRun(cron: string, tz: string): Date {
-  const it = parser.parseExpression(cron, { tz });
+  const it = parser.parseExpression(cron, { tz, currentDate: new Date() });
   return it.next().toDate();
 }

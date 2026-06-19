@@ -166,7 +166,8 @@ export class ScheduleTriggerProcessor extends WorkerHost {
             )
           : parser
               .parseExpression(schedule.cronExpression, {
-                tz: schedule.timezone
+                tz: schedule.timezone,
+                currentDate: new Date()
               })
               .next()
               .toDate();
