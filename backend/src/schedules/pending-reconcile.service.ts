@@ -42,6 +42,7 @@ export class PendingReconcileService {
       where: {
         status: "pending",
         createdAt: { lte: cutoff },
+        NOT: { errorReason: "stale_pending_requeued" },
         schedule: { status: "active" }
       },
       include: {
@@ -76,8 +77,7 @@ export class PendingReconcileService {
             index: 0
           },
           {
-            // Reconcile requeues are deduped by log id + timestamp; worker itself
-            // guards against already-sent logs.
+            // Mark the log so the next cron pass does not enqueue it again.
             jobId: `${log.id}:reconcile:${Date.now()}:${Math.floor(Math.random() * 1000)}`,
             attempts: REQUEUE_ATTEMPTS,
             backoff: { type: "exponential", delay: REQUEUE_BACKOFF_MS },
@@ -85,6 +85,10 @@ export class PendingReconcileService {
             removeOnFail: true
           }
         );
+        await this.prisma.messageLog.update({
+          where: { id: log.id },
+          data: { errorReason: "stale_pending_requeued" }
+        });
         queued++;
       } catch {
         // Best effort; leave pending for next reconcile cycle.

@@ -6,6 +6,7 @@ import { ScheduleTriggerProcessor } from "./schedule-trigger.processor";
 import { MessageSendProcessor } from "./message-send.processor";
 import { PendingReconcileService } from "./pending-reconcile.service";
 import { RunCompletenessService } from "./run-completeness.service";
+import { SchedulesBootstrapService } from "./schedules-bootstrap.service";
 import { WhatsAppModule } from "../whatsapp/whatsapp.module";
 import { SocketModule } from "../socket/socket.module";
 import { MESSAGE_SEND_QUEUE, SCHEDULE_TRIGGER_QUEUE } from "./queue.constants";
@@ -25,7 +26,8 @@ import { MESSAGE_SEND_QUEUE, SCHEDULE_TRIGGER_QUEUE } from "./queue.constants";
     ScheduleTriggerProcessor,
     MessageSendProcessor,
     PendingReconcileService,
-    RunCompletenessService
+    RunCompletenessService,
+    SchedulesBootstrapService
   ],
   exports: [SchedulesService]
 })

@@ -76,10 +76,17 @@ flowchart TD
     ZR --> ZT
     ZG --> ZT
 
+    subgraph Startup Recovery
+      SA[App boots]
+      SB[SchedulesBootstrapService loads active schedules]
+      SC[Call rehydrateRepeats for active schedules without repeat keys]
+      SA --> SB --> SC --> H
+    end
+
     subgraph Recovery Loops
       AA[PendingReconcileService every minute]
       AB[Find stale pending logs for active schedules]
-      AC[Requeue send jobs best-effort]
+      AC[Requeue send jobs best-effort and mark stale_pending_requeued]
       AA --> AB --> AC
 
       AD[RunCompletenessService every minute]

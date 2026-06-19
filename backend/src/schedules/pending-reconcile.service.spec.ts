@@ -45,4 +45,33 @@ describe("PendingReconcileService", () => {
       })
     );
   });
+
+  it("skips logs already marked as stale pending requeued", async () => {
+    const { PendingReconcileService } =
+      await import("./pending-reconcile.service");
+
+    const prisma = {
+      messageLog: {
+        findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn()
+      }
+    } as any;
+
+    const sendQueue = {
+      add: jest.fn().mockResolvedValue(undefined)
+    } as any;
+
+    const svc = new PendingReconcileService(prisma, sendQueue);
+    await svc.reconcilePendingLogs();
+
+    expect(prisma.messageLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          NOT: { errorReason: "stale_pending_requeued" }
+        })
+      })
+    );
+    expect(prisma.messageLog.update).not.toHaveBeenCalled();
+    expect(sendQueue.add).not.toHaveBeenCalled();
+  });
 });
