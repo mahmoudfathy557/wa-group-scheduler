@@ -51,3 +51,122 @@ describe("schedules dto / cron helpers", () => {
     });
   });
 });
+
+describe("SchedulesService - Disconnect Auto-Pause", () => {
+  it("pauses all active schedules for tenant when disconnect event fires", async () => {
+    const { SchedulesService } = await import("./schedules.service");
+
+    const tprisma = {
+      client: {
+        schedule: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: "schedule-1",
+              status: "active",
+              tenantId: "tenant-1",
+              repeatJobKey: "repeat-1"
+            },
+            {
+              id: "schedule-2",
+              status: "active",
+              tenantId: "tenant-1",
+              repeatJobKey: "repeat-2"
+            }
+          ]),
+          updateMany: jest.fn().mockResolvedValue({ count: 2 })
+        }
+      }
+    } as any;
+
+    const prisma = {
+      schedule: {
+        updateMany: jest.fn().mockResolvedValue({ count: 2 })
+      }
+    } as any;
+
+    const ctx = {
+      requireTenantId: jest.fn().mockReturnValue("tenant-1")
+    } as any;
+
+    const triggerQueue = {
+      removeRepeatable: jest.fn().mockResolvedValue(undefined)
+    } as any;
+
+    const scheduleService = new SchedulesService(
+      tprisma,
+      prisma,
+      ctx,
+      triggerQueue
+    );
+
+    // Call pauseAllActive to simulate disconnect event triggering auto-pause
+    const result = await scheduleService.pauseAllActive();
+
+    // Verify all active schedules were paused
+    expect(result.pausedCount).toBe(2);
+    expect(tprisma.client.schedule.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: ["schedule-1", "schedule-2"] } },
+        data: { status: "paused" }
+      })
+    );
+
+    // Verify repeat jobs were removed
+    expect(triggerQueue.removeRepeatable).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps pause idempotent when repeated disconnect events occur", async () => {
+    const { SchedulesService } = await import("./schedules.service");
+
+    const tprisma = {
+      client: {
+        schedule: {
+          findMany: jest
+            .fn()
+            .mockResolvedValueOnce([
+              {
+                id: "schedule-1",
+                status: "active",
+                tenantId: "tenant-1",
+                repeatJobKey: "repeat-1"
+              }
+            ])
+            .mockResolvedValueOnce([]), // Second call returns empty (already paused)
+          updateMany: jest.fn().mockResolvedValue({ count: 1 })
+        }
+      }
+    } as any;
+
+    const prisma = {
+      schedule: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 })
+      }
+    } as any;
+
+    const ctx = {
+      requireTenantId: jest.fn().mockReturnValue("tenant-1")
+    } as any;
+
+    const triggerQueue = {
+      removeRepeatable: jest.fn().mockResolvedValue(undefined)
+    } as any;
+
+    const scheduleService = new SchedulesService(
+      tprisma,
+      prisma,
+      ctx,
+      triggerQueue
+    );
+
+    // First disconnect: pause 1 schedule
+    const result1 = await scheduleService.pauseAllActive();
+    expect(result1.pausedCount).toBe(1);
+
+    // Second disconnect: no active schedules left (already paused from first call)
+    const result2 = await scheduleService.pauseAllActive();
+    expect(result2.pausedCount).toBe(0);
+
+    // Verify repeated calls remain safe and idempotent
+    expect(tprisma.client.schedule.findMany).toHaveBeenCalledTimes(2);
+  });
+});

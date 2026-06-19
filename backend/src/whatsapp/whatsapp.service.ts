@@ -18,6 +18,7 @@ import * as QRCode from "qrcode";
 import { PrismaService } from "../prisma/prisma.service";
 import { BaileysAuthAdapter } from "./baileys-auth.adapter";
 import { WhatsAppGateway } from "../socket/whatsapp.gateway";
+import { SchedulesService } from "../schedules/schedules.service";
 
 interface TenantSocketEntry {
   sock: WASocket;
@@ -36,7 +37,9 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly authAdapter: BaileysAuthAdapter,
     @Inject(forwardRef(() => WhatsAppGateway))
-    private readonly gateway: WhatsAppGateway
+    private readonly gateway: WhatsAppGateway,
+    @Inject(forwardRef(() => SchedulesService))
+    private readonly schedulesService: SchedulesService
   ) {}
 
   async onModuleInit() {
@@ -140,6 +143,21 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
           status: "disconnected",
           reason: isLoggedOut ? "logged_out" : "connection_lost"
         });
+
+        // Auto-pause all active schedules for this tenant when disconnect happens.
+        // This prevents stale trigger attempts while connection is down.
+        try {
+          const pauseResult = await this.schedulesService.pauseAllActive();
+          if (pauseResult.pausedCount > 0) {
+            this.logger.log(
+              `Tenant ${tenantId} disconnected: auto-paused ${pauseResult.pausedCount} active schedules`
+            );
+          }
+        } catch (pauseErr) {
+          this.logger.warn(
+            `Failed to auto-pause schedules for tenant ${tenantId}: ${pauseErr?.message}`
+          );
+        }
 
         if (isLoggedOut) {
           this.logger.warn(`Tenant ${tenantId} logged out — wiping creds`);

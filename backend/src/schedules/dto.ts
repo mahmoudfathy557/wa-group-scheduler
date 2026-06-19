@@ -79,9 +79,20 @@ export function isCronAtLeastMinInterval(
 
   try {
     const it = parser.parseExpression(expr, { tz });
-    const first = it.next().toDate();
-    const second = it.next().toDate();
-    return second.getTime() - first.getTime() >= minMinutes * 60 * 1000;
+    const minIntervalMs = minMinutes * 60 * 1000;
+    let prev = it.next().toDate();
+
+    // Some expressions (e.g. "0,15 * * * *") have uneven gaps.
+    // Validate the minimum gap across several upcoming runs.
+    for (let i = 0; i < 12; i++) {
+      const next = it.next().toDate();
+      if (next.getTime() - prev.getTime() < minIntervalMs) {
+        return false;
+      }
+      prev = next;
+    }
+
+    return true;
   } catch {
     return false;
   }

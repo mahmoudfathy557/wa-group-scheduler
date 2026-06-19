@@ -27,19 +27,19 @@ Multi-tenant WhatsApp group message scheduler. Connect a WhatsApp account, sync 
 
 ## Locked design decisions
 
-| Concern              | Decision                                                                                                                                                      |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Queue engine         | BullMQ via `@nestjs/bullmq`, repeatable jobs with cron `{ pattern, tz }` or interval `{ every, startDate }`, `jobId == scheduleId`.                   |
-| Tenancy              | One user per tenant. Atomic register transaction. Prisma `$extends` injects `tenantId` into every query.                                                  |
+| Concern              | Decision                                                                                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Queue engine         | BullMQ via `@nestjs/bullmq`, repeatable jobs with cron `{ pattern, tz }` or interval `{ every, startDate }`, `jobId == scheduleId`.                        |
+| Tenancy              | One user per tenant. Atomic register transaction. Prisma `$extends` injects `tenantId` into every query.                                                   |
 | Auth                 | JWT bearer,`Authorization: Bearer …`, expiry 12h.                                                                                                          |
-| WhatsApp library     | `baileys` ^6.7.16 (the active maintained fork, **not** `@whiskeysockets/baileys`).                                                                  |
-| Auth state storage   | Per-tenant: encrypted `WhatsAppSession.encryptedCreds` (single row) + `WhatsAppAuthKey` (one row per Signal pre-key). All values AES-256-GCM.             |
-| Encryption           | AES-256-GCM, 12-byte IV, 16-byte auth tag, format `[IV ‖ tag ‖ ciphertext]`. Master key in `ENCRYPTION_KEY` (64 hex chars).                             |
-| Message log statuses | `pending` → `sent` \| `failed` only. No `queued`/`retrying`.                                                                                       |
-| Daily cap            | `DAILY_MESSAGE_CAP_PER_TENANT=100` per tenant per day in tenant timezone. Counts `sent + pending`. Over-cap → `failed:daily_cap_exceeded`, no retry.   |
+| WhatsApp library     | `baileys` ^6.7.16 (the active maintained fork, **not** `@whiskeysockets/baileys`).                                                                         |
+| Auth state storage   | Per-tenant: encrypted `WhatsAppSession.encryptedCreds` (single row) + `WhatsAppAuthKey` (one row per Signal pre-key). All values AES-256-GCM.              |
+| Encryption           | AES-256-GCM, 12-byte IV, 16-byte auth tag, format `[IV ‖ tag ‖ ciphertext]`. Master key in `ENCRYPTION_KEY` (64 hex chars).                                |
+| Message log statuses | `pending` → `sent` \| `failed` only. No `queued`/`retrying`.                                                                                               |
+| Daily cap            | `DAILY_MESSAGE_CAP_PER_TENANT=100` per tenant per day in tenant timezone. Counts `sent + pending`. Over-cap → `failed:daily_cap_exceeded`, no retry.       |
 | Anti-ban             | 5–10 s jittered delay between sends per tenant, Redis `SETNX wa:lock:tenant:{id}` with 30 s TTL serializes, 3 retries with exponential backoff (5 s base). |
-| Log retention        | `LOG_RETENTION_DAYS=7`, daily 03:00 cron prune.                                                                                                             |
-| Single instance      | `docker-compose.yml` has `deploy.replicas: 1`. Scaling out would require migrating Baileys session ownership across instances — out of scope.            |
+| Log retention        | `LOG_RETENTION_DAYS=7`, daily 03:00 cron prune.                                                                                                            |
+| Single instance      | `docker-compose.yml` has `deploy.replicas: 1`. Scaling out would require migrating Baileys session ownership across instances — out of scope.              |
 
 ## Getting started
 
@@ -169,6 +169,50 @@ The frontend is served at [http://localhost:5173](http://localhost:5173) and the
 - **Disconnect / re-link**: On `loggedOut` from WhatsApp the backend automatically wipes that tenant's session + key rows so the next `/whatsapp/connect` starts fresh with a new QR.
 - **Restart safety**: On boot the backend reconnects every tenant whose `WhatsAppSession.encryptedCreds` is non-null and re-registers BullMQ repeatable jobs for every `active` schedule (`SchedulesService.rehydrateRepeats`).
 
+## Account Switch Runbook (Safe Reconnection with New Account)
+
+If you need to switch to a different WhatsApp account, follow this procedure to avoid stale messages and orphaned queue jobs:
+
+### Steps
+
+1. **Pause all schedules** in the UI or via the schedules list. This step is optional—see auto-pause note below.
+2. **Disconnect** the current account at `/connect` → _Disconnect_.
+   - This wipes `WhatsAppSession` credentials and `WhatsAppAuthKey` rows automatically.
+3. **Auto-pause verification** (logs only):
+   - The backend automatically pauses all active schedules for your tenant when disconnection is detected.
+   - Check the backend logs for: `Tenant {id} disconnected: auto-paused N active schedules`.
+   - Queue jobs (`BullMQ`) are cleaned up and will not fire stale messages.
+4. **Re-link the new account** at `/connect` → _Start QR session_ → scan with your new phone's WhatsApp.
+5. **Sync groups** at `/groups`. Groups are tied to your WhatsApp account, so syncing refreshes the list for the new account.
+6. **(Optional) Re-map schedules** if the new account has different groups. Delete stale group links and re-assign schedules to the new groups.
+7. **Resume schedules** when ready. New sends use the new account.
+
+### Auto-Pause Policy
+
+- When your tenant's WhatsApp connection is lost (error, logout, or manual disconnect), **all active schedules are automatically paused**.
+- This prevents stale trigger attempts and duplicate sends while the connection is down.
+- Paused schedules remain in the database; they do not fire until you explicitly resume them.
+- The auto-pause is **idempotent**—repeated disconnects do not cause errors.
+- If you lose connection temporarily and reconnect, you must manually resume schedules.
+
+### Why Pause During Switch?
+
+- Account switching changes your group memberships. A schedule configured for groups A, B, C might only have A, B in the new account.
+- Without pause, the old triggers could attempt to send to groups that no longer exist or belong to a different account, causing failures and pending-log buildup.
+- Pending logs from the old account persist so you can audit or reconcile them with the `Logs` view → _Clear_ feature.
+
+### Pending Log Cleanup
+
+After switching accounts, you may have pending logs from sends that could not complete. These are safe to manually clear:
+
+1. Go to `/logs`.
+2. Filter by status = `pending` if desired.
+3. Use the _Clear logs_ feature to remove them.
+
+Alternatively, logs are automatically pruned after `LOG_RETENTION_DAYS` (default 7 days).
+
+---
+
 ## Tests
 
 ```bash
@@ -176,19 +220,19 @@ cd backend
 npm test
 ```
 
-Covers `AuthService`, `TenantPrismaService` extension contract, and cron / timezone helpers used by `SchedulesService`.
+Covers `AuthService`, `TenantPrismaService` extension contract, and cron / timezone helpers used by `SchedulesService`. Also includes end-to-end account-switch flow validation.
 
 ## Troubleshooting
 
-| Symptom                                                | Verify quickly                                                                                                             | Fix                                                                                                                                     |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Status stays `connecting`, no QR appears             | Check backend logs for reconnect loops / connection close events.                                                          | Ensure outbound internet access from backend to WhatsApp Web endpoints, then retry from `/connect`.                                   |
+| Symptom                                              | Verify quickly                                                                                                         | Fix                                                                                                                                     |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Status stays `connecting`, no QR appears             | Check backend logs for reconnect loops / connection close events.                                                      | Ensure outbound internet access from backend to WhatsApp Web endpoints, then retry from `/connect`.                                     |
 | QR scans, status flips to `disconnected: logged_out` | Confirm `logged_out` is emitted in `/connect` status or backend logs.                                                  | Re-link with a different WhatsApp number/device state (remove stale linked devices first). Logged-out sessions are wiped automatically. |
 | Logs stay `pending` forever                          | Confirm backend process is running and Redis is reachable (`REDIS_URL`). Look for `MessageSendProcessor` startup logs. | Start/fix Redis connectivity and restart backend worker process. Pending rows will resolve on the next trigger run.                     |
-| Schedule fires at wrong time                           | Compare schedule timezone and tenant timezone to your expected local time.                                                 | Set the correct IANA timezone on the schedule and save again. Cron evaluation uses schedule timezone, not server timezone.              |
-| Save fails with cron interval error                    | Check the cron expression frequency.                                                                                       | Use interval >= 30 minutes (for example `*/30 * * * *`, `0 */1 * * *`, `0 */2 * * *`) or less frequent cron patterns.             |
+| Schedule fires at wrong time                         | Compare schedule timezone and tenant timezone to your expected local time.                                             | Set the correct IANA timezone on the schedule and save again. Cron evaluation uses schedule timezone, not server timezone.              |
+| Save fails with cron interval error                  | Check the cron expression frequency.                                                                                   | Use interval >= 30 minutes (for example `*/30 * * * *`, `0 */1 * * *`, `0 */2 * * *`) or less frequent cron patterns.                   |
 | Sends fail with `daily_cap_exceeded`                 | Check `DAILY_MESSAGE_CAP_PER_TENANT` and today's `pending + sent` volume for the tenant.                               | Increase cap for testing or reduce fan-out/frequency. These failures are intentionally not retried.                                     |
-| `Invalid encryption key` at boot                     | Validate `ENCRYPTION_KEY` length and format.                                                                             | Regenerate with `openssl rand -hex 32`, place exactly 64 hex chars in `.env`, then restart backend.                                 |
+| `Invalid encryption key` at boot                     | Validate `ENCRYPTION_KEY` length and format.                                                                           | Regenerate with `openssl rand -hex 32`, place exactly 64 hex chars in `.env`, then restart backend.                                     |
 
 ## License
 

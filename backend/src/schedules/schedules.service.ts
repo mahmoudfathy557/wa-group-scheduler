@@ -237,6 +237,59 @@ export class SchedulesService {
   }
 
   /**
+   * Auto-pause all active schedules for a tenant when disconnect event fires.
+   * Used to prevent stale trigger attempts while tenant connection is down.
+   * Idempotent: repeated calls do nothing (schedules already paused).
+   */
+  async pauseAllActive() {
+    const tenantId = this.ctx.requireTenantId();
+    const client: any = this.tprisma.client;
+
+    // Find all active schedules for this tenant.
+    const active = await client.schedule.findMany({
+      where: { status: "active" }
+    });
+
+    if (active.length === 0) {
+      return { pausedCount: 0 };
+    }
+
+    // Pause all at once via updateMany (faster than individual updates).
+    const activeIds = active.map((s: any) => s.id);
+    const result = await client.schedule.updateMany({
+      where: { id: { in: activeIds } },
+      data: { status: "paused" }
+    });
+
+    // Cleanup: remove repeatable jobs from queue and clear state.
+    await this.cleanupScheduleRepeatJobs(active, activeIds);
+
+    return { pausedCount: result.count };
+  }
+
+  /**
+   * Helper: remove repeatable jobs from queue and clear repeatJobKey from shared schema.
+   * This prevents re-hydration on restart and orphaned jobs in the queue.
+   */
+  private async cleanupScheduleRepeatJobs(
+    active: Array<any>,
+    activeIds: string[]
+  ): Promise<void> {
+    // Remove repeatable jobs from the queue for each schedule.
+    for (const schedule of active) {
+      if (schedule.repeatJobKey) {
+        await this.removeRepeat(schedule.repeatJobKey);
+      }
+    }
+
+    // Clear the repeatJobKey in the shared schema so we don't re-hydrate on restart.
+    await this.prisma.schedule.updateMany({
+      where: { id: { in: activeIds } },
+      data: { repeatJobKey: null }
+    });
+  }
+
+  /**
    * Bootstrap helper, called from a startup hook to ensure all active schedules
    * have repeatable jobs registered (handles fresh restart on different Redis).
    */

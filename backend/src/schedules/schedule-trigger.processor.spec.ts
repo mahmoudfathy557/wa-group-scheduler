@@ -124,4 +124,65 @@ describe("ScheduleTriggerProcessor", () => {
       data: { errorReason: "enqueue_pending_retry" }
     });
   });
+
+  it("safely skips when schedule is paused after trigger enqueue", async () => {
+    const prisma = {
+      schedule: {
+        // findFirst with status: "active" filter returns null since schedule is paused
+        findFirst: jest.fn().mockResolvedValue(null),
+        update: jest.fn()
+      },
+      messageLog: {
+        create: jest.fn(),
+        updateMany: jest.fn()
+      },
+      $transaction: jest.fn().mockResolvedValue([])
+    } as any;
+
+    const sendQueue = {
+      addBulk: jest.fn(),
+      add: jest.fn()
+    } as any;
+
+    const processor = new ScheduleTriggerProcessor(prisma, sendQueue);
+    const job = {
+      data: { scheduleId: "schedule-1", tenantId: "tenant-1" }
+    } as any;
+
+    // Should not crash, should not enqueue any jobs
+    await processor.process(job);
+
+    expect(sendQueue.addBulk).not.toHaveBeenCalled();
+    expect(sendQueue.add).not.toHaveBeenCalled();
+  });
+
+  it("safely skips when schedule is deleted after trigger enqueue", async () => {
+    const prisma = {
+      schedule: {
+        findFirst: jest.fn().mockResolvedValue(null), // Schedule not found
+        update: jest.fn()
+      },
+      messageLog: {
+        create: jest.fn(),
+        updateMany: jest.fn()
+      },
+      $transaction: jest.fn().mockResolvedValue([])
+    } as any;
+
+    const sendQueue = {
+      addBulk: jest.fn(),
+      add: jest.fn()
+    } as any;
+
+    const processor = new ScheduleTriggerProcessor(prisma, sendQueue);
+    const job = {
+      data: { scheduleId: "schedule-1", tenantId: "tenant-1" }
+    } as any;
+
+    // Should not crash when schedule is deleted
+    await processor.process(job);
+
+    expect(sendQueue.addBulk).not.toHaveBeenCalled();
+    expect(sendQueue.add).not.toHaveBeenCalled();
+  });
 });
