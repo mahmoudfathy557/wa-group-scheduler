@@ -10,6 +10,8 @@ import { SchedulesBootstrapService } from "./schedules-bootstrap.service";
 import { WhatsAppModule } from "../whatsapp/whatsapp.module";
 import { SocketModule } from "../socket/socket.module";
 import { MESSAGE_SEND_QUEUE, SCHEDULE_TRIGGER_QUEUE } from "./queue.constants";
+import { WaSendGateway } from "./wa-send.gateway";
+import { SEND_GATEWAY } from "./send-gateway.interface";
 
 @Module({
   imports: [
@@ -27,7 +29,8 @@ import { MESSAGE_SEND_QUEUE, SCHEDULE_TRIGGER_QUEUE } from "./queue.constants";
     MessageSendProcessor,
     PendingReconcileService,
     RunCompletenessService,
-    SchedulesBootstrapService
+    SchedulesBootstrapService,
+    { provide: SEND_GATEWAY, useClass: WaSendGateway }
   ],
   exports: [SchedulesService]
 })

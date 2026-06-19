@@ -1,14 +1,14 @@
 import { Processor, WorkerHost, InjectQueue } from "@nestjs/bullmq";
-import { Logger } from "@nestjs/common";
+import { Inject, Logger } from "@nestjs/common";
 import { Job, Queue } from "bullmq";
 import Redis from "ioredis";
 import { randomUUID } from "crypto";
 import { startOfDay } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { PrismaService } from "../prisma/prisma.service";
-import { WhatsAppService } from "../whatsapp/whatsapp.service";
 import { WhatsAppGateway } from "../socket/whatsapp.gateway";
 import { MESSAGE_SEND_QUEUE } from "./queue.constants";
+import { ISendGateway, SEND_GATEWAY } from "./send-gateway.interface";
 
 interface SendJobData {
   tenantId: string;
@@ -38,8 +38,6 @@ const RETRY_BACKOFF_MS = 5000;
 export class MessageSendProcessor extends WorkerHost {
   private readonly logger = new Logger(MessageSendProcessor.name);
   private readonly redis: Redis;
-  private readonly minDelay: number;
-  private readonly maxDelay: number;
   private readonly dailyCap: number;
   private readonly lockAcquireTimeoutMs: number;
   private readonly retryBaseDelayMs: number;
@@ -50,7 +48,7 @@ export class MessageSendProcessor extends WorkerHost {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly wa: WhatsAppService,
+    @Inject(SEND_GATEWAY) private readonly sendGateway: ISendGateway,
     private readonly gateway: WhatsAppGateway,
     @InjectQueue(MESSAGE_SEND_QUEUE)
     private readonly sendQueue: Queue<SendJobData>
@@ -59,8 +57,6 @@ export class MessageSendProcessor extends WorkerHost {
     this.redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
       maxRetriesPerRequest: null
     });
-    this.minDelay = parseInt(process.env.MESSAGE_DELAY_MIN_MS || "5000", 10);
-    this.maxDelay = parseInt(process.env.MESSAGE_DELAY_MAX_MS || "10000", 10);
     this.dailyCap = parseInt(
       process.env.DAILY_MESSAGE_CAP_PER_TENANT || "100",
       10
@@ -115,7 +111,7 @@ export class MessageSendProcessor extends WorkerHost {
     }
 
     // Do not attempt send workflow unless tenant session is connected.
-    if (this.wa.getStatus(data.tenantId) !== "connected") {
+    if (!this.sendGateway.isConnected(data.tenantId)) {
       const delayMs = this.computeDisconnectedRetryDelay(job.attemptsMade + 1);
       await this.openDisconnectCooldown(data.tenantId, delayMs);
       await this.reschedulePending(data, "whatsapp_not_connected", delayMs);
@@ -169,20 +165,14 @@ export class MessageSendProcessor extends WorkerHost {
     }
 
     try {
-      // Skip jitter for the first send of a fan-out (index 0) to give snappy first message.
-      if (data.index > 0) {
-        const jitter =
-          this.minDelay + Math.random() * (this.maxDelay - this.minDelay);
-        await sleep(jitter);
-      }
-
       try {
-        const waMessageId = await this.wa.sendText(
-          data.tenantId,
-          data.groupJid,
-          data.messageText,
-          data.imageUrls
-        );
+        const waMessageId = await this.sendGateway.sendWithJitter({
+          tenantId: data.tenantId,
+          groupJid: data.groupJid,
+          messageText: data.messageText,
+          imageUrls: data.imageUrls,
+          index: data.index
+        });
         await this.prisma.messageLog.update({
           where: { id: data.logId },
           data: { status: "sent", whatsappMessageId: waMessageId ?? null }
