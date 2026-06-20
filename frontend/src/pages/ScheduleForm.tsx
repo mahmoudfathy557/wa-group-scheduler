@@ -239,14 +239,15 @@ export function ScheduleForm() {
                     alt="Schedule attachment"
                     className="w-full h-24 sm:h-28 object-cover"
                   />
-                  <button
+                  <Button
                     type="button"
                     onClick={() => removeExistingImage(url)}
                     variant="ghost"
+                    size="sm"
                     className="absolute top-1 right-1 bg-background border border-border hover:bg-destructive hover:text-destructive-foreground rounded-md px-2 py-1 text-xs font-medium opacity-0 group-hover:opacity-100 transition"
                   >
                     ✕
-                  </button>
+                  </Button>
                 </div>
               ))}
 
