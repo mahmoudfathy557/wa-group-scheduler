@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import toast from "react-hot-toast";
+import { AUTH_UI_TEXT } from "../lib/constants";
 import { useAuth } from "../hooks/useAuth";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -40,7 +41,7 @@ export function Login() {
       await login(v.email, v.password);
       nav("/connect");
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Login failed");
+      toast.error(e?.response?.data?.message || AUTH_UI_TEXT.loginFailed);
     } finally {
       setBusy(false);
     }
@@ -88,7 +89,7 @@ export function Login() {
             </div>
 
             <Button type="submit" disabled={busy} className="w-full" size="lg">
-              {busy ? "Signing in…" : "Sign in"}
+              {busy ? AUTH_UI_TEXT.signingIn : AUTH_UI_TEXT.signIn}
             </Button>
 
             <div className="text-center">

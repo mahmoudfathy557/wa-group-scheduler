@@ -2,6 +2,10 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { api } from "../lib/api";
+import {
+  LOGS_REFETCH_INTERVAL_MS,
+  RETRY_CENTER_UI_TEXT
+} from "../lib/constants";
 import { Button } from "../components/ui/Button";
 import {
   Card,
@@ -48,7 +52,7 @@ export function RetryCenter() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["retry-center-logs"],
     queryFn: async () => (await api.get<Log[]>("/logs")).data,
-    refetchInterval: 10000
+    refetchInterval: LOGS_REFETCH_INTERVAL_MS
   });
 
   const resendMutation = useMutation({
@@ -56,7 +60,7 @@ export function RetryCenter() {
       await api.post(`/logs/${logId}/resend`);
     },
     onSuccess: async () => {
-      toast.success("Message sent!");
+      toast.success(RETRY_CENTER_UI_TEXT.sentSuccess);
       await refetch();
     }
   });
@@ -68,10 +72,10 @@ export function RetryCenter() {
     onSuccess: async () => {
       setClearError("");
       await refetch();
-      toast.success("Logs cleared from view");
+      toast.success(RETRY_CENTER_UI_TEXT.clearedSuccess);
     },
     onError: () => {
-      setClearError("Could not clear logs right now. Please try again.");
+      setClearError(RETRY_CENTER_UI_TEXT.clearFailed);
     }
   });
 
@@ -111,7 +115,9 @@ export function RetryCenter() {
               variant="outline"
               size="sm"
             >
-              {clearLogsMutation.isPending ? "Clearing..." : "Clear from view"}
+              {clearLogsMutation.isPending
+                ? RETRY_CENTER_UI_TEXT.clearing
+                : RETRY_CENTER_UI_TEXT.clearFromView}
             </Button>
           </div>
         </div>
@@ -123,11 +129,13 @@ export function RetryCenter() {
       <CardContent>
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <p className="text-muted-foreground">Loading retry items…</p>
+            <p className="text-muted-foreground">
+              {RETRY_CENTER_UI_TEXT.loading}
+            </p>
           </div>
         ) : actionableLogs.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">
-            No pending or failed messages right now.
+            {RETRY_CENTER_UI_TEXT.empty}
           </p>
         ) : (
           <div className="rounded-lg border overflow-hidden">
@@ -186,7 +194,9 @@ export function RetryCenter() {
                         variant="outline"
                         size="sm"
                       >
-                        {resendMutation.isPending ? "Sending..." : "Send now"}
+                        {resendMutation.isPending
+                          ? RETRY_CENTER_UI_TEXT.sending
+                          : RETRY_CENTER_UI_TEXT.sendNow}
                       </Button>
                     </TableCell>
                   </TableRow>

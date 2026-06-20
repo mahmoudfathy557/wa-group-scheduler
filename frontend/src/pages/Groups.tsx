@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { api } from "../lib/api";
+import { GROUPS_PAGE_SIZE, GROUPS_UI_TEXT } from "../lib/constants";
 import { Button } from "../components/ui/Button";
 import {
   Card,
@@ -26,6 +28,8 @@ interface Group {
 
 export function Groups() {
   const qc = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
   const { data: groups, isLoading } = useQuery({
     queryKey: ["groups"],
     queryFn: async () => (await api.get<Group[]>("/groups")).data
@@ -33,35 +37,107 @@ export function Groups() {
   const sync = useMutation({
     mutationFn: async () => (await api.post<Group[]>("/groups/sync")).data,
     onSuccess: () => {
-      toast.success("Groups synced");
+      toast.success(GROUPS_UI_TEXT.syncSuccess);
       qc.invalidateQueries({ queryKey: ["groups"] });
     },
     onError: (e: any) =>
       toast.error(
-        e?.response?.data?.message || "Sync failed — is WhatsApp connected?"
+        e?.response?.data?.message || GROUPS_UI_TEXT.syncFallbackError
       )
   });
+
+  const filteredGroups = useMemo(() => {
+    if (!groups) return [];
+    const query = search.trim().toLowerCase();
+    if (!query) return groups;
+    return groups.filter(
+      (g) =>
+        g.name.toLowerCase().includes(query) ||
+        g.groupJid.toLowerCase().includes(query)
+    );
+  }, [groups, search]);
+
+  const totalGroups = filteredGroups.length;
+  const totalPages = Math.max(1, Math.ceil(totalGroups / GROUPS_PAGE_SIZE));
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const pagedGroups = useMemo(() => {
+    if (!filteredGroups) return [];
+    const start = (page - 1) * GROUPS_PAGE_SIZE;
+    return filteredGroups.slice(start, start + GROUPS_PAGE_SIZE);
+  }, [filteredGroups, page]);
+
+  const rangeStart = totalGroups === 0 ? 0 : (page - 1) * GROUPS_PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * GROUPS_PAGE_SIZE, totalGroups);
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Groups</CardTitle>
-        <Button
-          onClick={() => sync.mutate()}
-          disabled={sync.isPending}
-          size="sm"
-        >
-          {sync.isPending ? "Syncing…" : "Sync from WhatsApp"}
-        </Button>
+        <div>
+          <CardTitle>Groups</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            {GROUPS_UI_TEXT.totalLabel}: {totalGroups}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={isLoading || totalGroups === 0 || page <= 1}
+          >
+            {GROUPS_UI_TEXT.prev}
+          </Button>
+          <span className="text-xs text-muted-foreground min-w-24 text-center">
+            {rangeStart}-{rangeEnd} / {totalGroups}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={isLoading || totalGroups === 0 || page >= totalPages}
+          >
+            {GROUPS_UI_TEXT.next}
+          </Button>
+          <Button
+            onClick={() => sync.mutate()}
+            disabled={sync.isPending}
+            size="sm"
+          >
+            {sync.isPending
+              ? GROUPS_UI_TEXT.syncing
+              : GROUPS_UI_TEXT.syncButton}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
+        <div className="mb-4">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={GROUPS_UI_TEXT.searchPlaceholder}
+            className="w-full border border-input rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-ring focus:border-transparent transition bg-background"
+          />
+        </div>
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <p className="text-muted-foreground">Loading groups…</p>
+            <p className="text-muted-foreground">{GROUPS_UI_TEXT.loading}</p>
           </div>
         ) : !groups || groups.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">
-            No groups yet — connect WhatsApp and sync groups.
+            {GROUPS_UI_TEXT.empty}
+          </p>
+        ) : filteredGroups.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">
+            {GROUPS_UI_TEXT.emptyFiltered}
           </p>
         ) : (
           <div className="rounded-lg border overflow-hidden">
@@ -76,7 +152,7 @@ export function Groups() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groups.map((g) => (
+                {pagedGroups.map((g) => (
                   <TableRow key={g.id}>
                     <TableCell className="font-medium">{g.name}</TableCell>
                     <TableCell className="hidden sm:table-cell">

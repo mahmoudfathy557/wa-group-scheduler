@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import TimezoneSelect from "react-timezone-select";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { api } from "../lib/api";
+import { SCHEDULE_FORM_UI_TEXT } from "../lib/constants";
 import {
   CronBuilder,
   MIN_CRON_INTERVAL_MINUTES,
@@ -121,12 +122,12 @@ export function ScheduleForm() {
     const next = files.slice(0, remainingSlots);
 
     if (files.length > remainingSlots) {
-      toast.error("You can attach up to 5 images total");
+      toast.error(SCHEDULE_FORM_UI_TEXT.maxImagesError);
     }
 
     const nonImages = next.filter((f) => !f.type.startsWith("image/"));
     if (nonImages.length) {
-      toast.error("Only image files are allowed");
+      toast.error(SCHEDULE_FORM_UI_TEXT.imagesOnlyError);
       return;
     }
 
@@ -162,10 +163,12 @@ export function ScheduleForm() {
 
       if (isEdit) await api.patch(`/schedules/${id}`, fd);
       else await api.post("/schedules", fd);
-      toast.success("Saved");
+      toast.success(SCHEDULE_FORM_UI_TEXT.saveSuccess);
       nav("/schedules");
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Save failed");
+      toast.error(
+        e?.response?.data?.message || SCHEDULE_FORM_UI_TEXT.saveFailed
+      );
     }
   }
 
@@ -306,7 +309,14 @@ export function ScheduleForm() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="groupSearch">Groups</Label>
+          <Label htmlFor="groupSearch">Groups ({groups?.length ?? 0})</Label>
+          <p className="text-xs text-muted-foreground">
+            If you can&apos;t find a group, Sync groups first at page{" "}
+            <Link to="/groups" className="underline underline-offset-2">
+              <b>Groups</b>
+            </Link>
+            .
+          </p>
           <Controller
             name="groupIds"
             control={control}

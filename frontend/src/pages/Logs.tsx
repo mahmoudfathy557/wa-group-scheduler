@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { LOGS_REFETCH_INTERVAL_MS, LOGS_UI_TEXT } from "../lib/constants";
 import { Button } from "../components/ui/Button";
 import {
   Card,
@@ -50,7 +51,7 @@ export function Logs() {
     queryFn: async () =>
       (await api.get<Log[]>("/logs", { params: status ? { status } : {} }))
         .data,
-    refetchInterval: 10000
+    refetchInterval: LOGS_REFETCH_INTERVAL_MS
   });
 
   const groupNameByJid = Object.fromEntries(
@@ -86,7 +87,7 @@ export function Logs() {
               <option value="failed">Failed</option>
             </select>
             <Button onClick={() => refetch()} variant="outline" size="sm">
-              ↻ Refresh
+              {LOGS_UI_TEXT.refresh}
             </Button>
           </div>
         </div>
@@ -95,10 +96,12 @@ export function Logs() {
       <CardContent>
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <p className="text-muted-foreground">Loading logs…</p>
+            <p className="text-muted-foreground">{LOGS_UI_TEXT.loading}</p>
           </div>
         ) : !data || data.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">No logs yet.</p>
+          <p className="text-center text-muted-foreground py-8">
+            {LOGS_UI_TEXT.empty}
+          </p>
         ) : (
           <div className="rounded-lg border overflow-hidden">
             <Table>
@@ -163,7 +166,7 @@ export function Logs() {
       <div className="px-6 py-4 border-t">
         <Link to="/retry-center">
           <Button variant="outline" size="sm">
-            Open retry center
+            {LOGS_UI_TEXT.openRetryCenter}
           </Button>
         </Link>
       </div>

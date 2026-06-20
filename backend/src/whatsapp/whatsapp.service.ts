@@ -13,6 +13,12 @@ import makeWASocket, {
   WASocket
 } from "baileys";
 import * as QRCode from "qrcode";
+import {
+  GROUPS_FETCH_MAX_RETRIES,
+  GROUPS_FETCH_RETRY_DELAY_MS,
+  GROUPS_FETCH_TIMEOUT_MS,
+  GROUPS_SYNC_WAIT_LATEST_TIMEOUT_MS
+} from "../common/constants";
 import { PrismaService } from "../prisma/prisma.service";
 import { BaileysAuthAdapter } from "./baileys-auth.adapter";
 import { WhatsAppGateway } from "../socket/whatsapp.gateway";
@@ -21,6 +27,10 @@ interface TenantSocketEntry {
   sock: WASocket;
   status: "connecting" | "connected" | "disconnected";
   reconnectAttempts: number;
+}
+
+interface GroupFetchMap {
+  [jid: string]: GroupMetadata;
 }
 
 @Injectable()
@@ -226,8 +236,41 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       throw new ServiceUnavailableException(
         `WhatsApp not connected for tenant ${tenantId}. Go to 'Connect' Page first.`
       );
-    const map = await sock.groupFetchAllParticipating();
-    return Object.values(map);
+
+    const waitTimeoutMs = GROUPS_SYNC_WAIT_LATEST_TIMEOUT_MS;
+    const fetchTimeoutMs = GROUPS_FETCH_TIMEOUT_MS;
+    const maxRetries = GROUPS_FETCH_MAX_RETRIES;
+    const retryDelayMs = GROUPS_FETCH_RETRY_DELAY_MS;
+
+    const latestReached = await this.waitForChatsLatest(sock, waitTimeoutMs);
+    if (!latestReached) {
+      this.logger.warn(
+        `Tenant ${tenantId}: chats.set(isLatest=true) not observed within ${waitTimeoutMs}ms; falling back to direct group snapshot fetch`
+      );
+    }
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const startedAt = Date.now();
+      const map = (await this.withTimeout(
+        sock.groupFetchAllParticipating(),
+        fetchTimeoutMs,
+        `groupFetchAllParticipating timed out after ${fetchTimeoutMs}ms`
+      )) as GroupFetchMap;
+      const groups = Object.values(map);
+      const durationMs = Date.now() - startedAt;
+
+      this.logger.log(
+        `Tenant ${tenantId}: group fetch attempt ${attempt}/${maxRetries} returned ${groups.length} groups in ${durationMs}ms`
+      );
+
+      if (groups.length > 0 || attempt === maxRetries) {
+        return groups;
+      }
+
+      await this.delay(retryDelayMs * attempt);
+    }
+
+    return [];
   }
 
   async sendText(
@@ -264,6 +307,65 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       where: { tenantId },
       create: { tenantId, connectionStatus: status },
       update: { connectionStatus: status, lastActive: new Date() }
+    });
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    message: string
+  ): Promise<T> {
+    let timeoutHandle: NodeJS.Timeout | null = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timeoutHandle = setTimeout(
+            () => reject(new Error(message)),
+            timeoutMs
+          );
+        })
+      ]);
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
+  }
+
+  private waitForChatsLatest(
+    sock: WASocket,
+    timeoutMs: number
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const ev = sock.ev as any;
+
+      const cleanup = () => {
+        if (typeof ev.off === "function") {
+          ev.off("chats.set", onChatsSet);
+        } else if (typeof ev.removeListener === "function") {
+          ev.removeListener("chats.set", onChatsSet);
+        }
+      };
+
+      const finish = (value: boolean) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+
+      const onChatsSet = (payload: any) => {
+        if (payload?.isLatest === true) {
+          finish(true);
+        }
+      };
+
+      ev.on("chats.set", onChatsSet);
+      setTimeout(() => finish(false), timeoutMs);
     });
   }
 }

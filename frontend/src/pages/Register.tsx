@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import toast from "react-hot-toast";
 import TimezoneSelect from "react-timezone-select";
+import { AUTH_UI_TEXT } from "../lib/constants";
 import { useAuth } from "../hooks/useAuth";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -47,7 +48,9 @@ export function Register() {
       await doRegister(v.email, v.password, v.tenantName, v.timezone);
       nav("/connect");
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Registration failed");
+      toast.error(
+        e?.response?.data?.message || AUTH_UI_TEXT.registrationFailed
+      );
     } finally {
       setBusy(false);
     }
@@ -123,7 +126,9 @@ export function Register() {
             </div>
 
             <Button type="submit" disabled={busy} className="w-full" size="lg">
-              {busy ? "Creating…" : "Create workspace"}
+              {busy
+                ? AUTH_UI_TEXT.creatingWorkspace
+                : AUTH_UI_TEXT.createWorkspace}
             </Button>
 
             <div className="text-center">

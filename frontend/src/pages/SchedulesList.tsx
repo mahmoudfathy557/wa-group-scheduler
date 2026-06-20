@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { api } from "../lib/api";
+import { SCHEDULES_LIST_UI_TEXT } from "../lib/constants";
 import { Button } from "../components/ui/Button";
 import {
   Card,
@@ -62,7 +63,7 @@ export function SchedulesList() {
       await api.delete(`/schedules/${id}`);
     },
     onSuccess: () => {
-      toast.success("Deleted");
+      toast.success(SCHEDULES_LIST_UI_TEXT.deleteSuccess);
       qc.invalidateQueries({ queryKey: ["schedules"] });
     }
   });
@@ -72,17 +73,19 @@ export function SchedulesList() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Schedules</CardTitle>
         <Link to="/schedules/new">
-          <Button size="sm">+ New schedule</Button>
+          <Button size="sm">{SCHEDULES_LIST_UI_TEXT.newSchedule}</Button>
         </Link>
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <p className="text-muted-foreground">Loading schedules…</p>
+            <p className="text-muted-foreground">
+              {SCHEDULES_LIST_UI_TEXT.loading}
+            </p>
           </div>
         ) : !data || data.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">
-            No schedules yet. Create your first one!
+            {SCHEDULES_LIST_UI_TEXT.empty}
           </p>
         ) : (
           <div className="rounded-lg border overflow-hidden">
@@ -143,22 +146,24 @@ export function SchedulesList() {
                           variant="ghost"
                           size="sm"
                         >
-                          {s.status === "active" ? "Pause" : "Resume"}
+                          {s.status === "active"
+                            ? SCHEDULES_LIST_UI_TEXT.pause
+                            : SCHEDULES_LIST_UI_TEXT.resume}
                         </Button>
                         <Link to={`/schedules/${s.id}/edit`}>
                           <Button variant="ghost" size="sm">
-                            Edit
+                            {SCHEDULES_LIST_UI_TEXT.edit}
                           </Button>
                         </Link>
                         <Button
                           onClick={() =>
-                            confirm("Delete this schedule?") &&
+                            confirm(SCHEDULES_LIST_UI_TEXT.deleteConfirm) &&
                             remove.mutate(s.id)
                           }
                           variant="destructive"
                           size="sm"
                         >
-                          Delete
+                          {SCHEDULES_LIST_UI_TEXT.delete}
                         </Button>
                       </div>
                     </TableCell>

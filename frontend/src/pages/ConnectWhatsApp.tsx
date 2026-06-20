@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { api } from "../lib/api";
+import {
+  CONNECT_WHATSAPP_UI_TEXT,
+  WA_STATUS_REFETCH_INTERVAL_MS
+} from "../lib/constants";
 import { useSocketEvent, getSocket } from "../hooks/useSocket";
 import { Button } from "../components/ui/Button";
 import {
@@ -32,7 +36,7 @@ export function ConnectWhatsApp() {
           qr?: string | null;
         }>("/whatsapp/status")
       ).data,
-    refetchInterval: 5000
+    refetchInterval: WA_STATUS_REFETCH_INTERVAL_MS
   });
 
   useEffect(() => {
@@ -54,9 +58,13 @@ export function ConnectWhatsApp() {
     setStatus(d.status);
     if (d.status === "connected") {
       setQr(null);
-      toast.success("WhatsApp connected");
+      toast.success(CONNECT_WHATSAPP_UI_TEXT.connectedToast);
     } else if (d.status === "disconnected") {
-      toast(d.reason === "logged_out" ? "Logged out" : "Disconnected");
+      toast(
+        d.reason === "logged_out"
+          ? CONNECT_WHATSAPP_UI_TEXT.loggedOutToast
+          : CONNECT_WHATSAPP_UI_TEXT.disconnectedToast
+      );
     }
   });
 
@@ -68,8 +76,7 @@ export function ConnectWhatsApp() {
   }
 
   async function disconnect() {
-    if (!confirm("Disconnect WhatsApp? Stored credentials will be wiped."))
-      return;
+    if (!confirm(CONNECT_WHATSAPP_UI_TEXT.disconnectConfirm)) return;
     await api.delete("/whatsapp/disconnect");
     setStatus("disconnected");
     setQr(null);
@@ -104,7 +111,9 @@ export function ConnectWhatsApp() {
           ) : (
             <div className="space-y-4">
               <Button onClick={startConnect} className="w-full" size="lg">
-                {qr ? "Waiting for scan…" : "Start QR session"}
+                {qr
+                  ? CONNECT_WHATSAPP_UI_TEXT.waitingForScan
+                  : CONNECT_WHATSAPP_UI_TEXT.startQrSession}
               </Button>
               {qr && (
                 <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center bg-muted">
