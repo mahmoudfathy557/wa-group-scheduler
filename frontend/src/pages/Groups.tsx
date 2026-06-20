@@ -79,14 +79,14 @@ export function Groups() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle>Groups</CardTitle>
           <p className="text-xs text-muted-foreground mt-1">
             {GROUPS_UI_TEXT.totalLabel}: {totalGroups}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
           <Button
             variant="outline"
             size="sm"
@@ -95,7 +95,7 @@ export function Groups() {
           >
             {GROUPS_UI_TEXT.prev}
           </Button>
-          <span className="text-xs text-muted-foreground min-w-24 text-center">
+          <span className="order-last w-full text-center text-xs text-muted-foreground sm:order-none sm:w-auto sm:min-w-24">
             {rangeStart}-{rangeEnd} / {totalGroups}
           </span>
           <Button
